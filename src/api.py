@@ -1,7 +1,7 @@
 import ujson
 import machine
 from log import Log
-from deviceconfig import DeviceConfig
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
 from deviceidentity import sanitize_device_name
 
 TAG = "API"
@@ -16,23 +16,12 @@ class DeviceAPI:
         self.device_config = device_config
         self.led_strip = led_strip
         self.pico_led = pico_led
-        self.device_name_file = "device_name.json"
-        self.device_name = self._load_device_name()
+        # The name in use (MQTT client id, hostname) is device_config.device_name.
+        # A rename is saved here and takes effect on the next restart.
+        self.device_name = device_config.device_name
         # Cache config to reduce file I/O allocations on saves
         self._config_cache = self._load_config_cache()
-    
-    def _load_device_name(self):
-        """Load device name from file, or use default."""
-        try:
-            with open(self.device_name_file, 'r') as f:
-                data = ujson.load(f)
-                name = sanitize_device_name(data.get('name', self.device_config.device_name))
-                Log.info(TAG, f'Loaded device name: {name}')
-                return name
-        except OSError:
-            Log.info(TAG, f'Using default device name: {self.device_config.device_name}')
-            return self.device_config.device_name
-    
+
     def _load_config_cache(self):
         """Load config from file once at startup and cache it."""
         try:
@@ -43,7 +32,7 @@ class DeviceAPI:
             return {}
     
     def set_device_name(self, name):
-        """Save device name."""
+        """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
         if not name or len(name) == 0 or len(name) > 32:
             return False
 
@@ -52,7 +41,7 @@ class DeviceAPI:
             return False
         
         try:
-            with open(self.device_name_file, 'w') as f:
+            with open(DEVICE_NAME_FILE, 'w') as f:
                 ujson.dump({'name': safe_name}, f)
             self.device_name = safe_name
             Log.info(TAG, f'Device name set to: {safe_name}')

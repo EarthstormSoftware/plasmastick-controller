@@ -39,8 +39,18 @@ class WLAN:
         self.time_last_disconnect = 0        
         
         Log.info(TAG,'Initialising WLAN')
+        self._set_hostname()
         self.wlan = network.WLAN(network.STA_IF)
         self.connect()
+
+    def _set_hostname(self):
+        """Use the device name as the DHCP/mDNS hostname (<name>.local).
+        Must happen before the interface connects."""
+        try:
+            network.hostname(self.device_config.device_name)
+            Log.info(TAG, f'Hostname set to: {network.hostname()}')
+        except Exception as e:
+            Log.warn(TAG, f'Failed to set hostname: {e}')
          
 
     def connect(self):
@@ -76,21 +86,6 @@ class WLAN:
                 connecttime = self.time_last_connect_completed - self.time_last_connect_started
                 Log.info(TAG, f'Connection took {connecttime} seconds')
                 
-                # Register mDNS
-                self._register_mdns()
-
-    def _register_mdns(self):
-        """Register device on mDNS network."""
-        try:
-            import mdns
-            # Try to load device name from API if available
-            device_name = self.device_config.device_name
-            mdns.init(network.STA_IF, hostname=device_name)
-            Log.info(TAG, f'Registered mDNS hostname: {device_name}.local')
-        except ImportError:
-            Log.debug(TAG, 'mDNS not available on this platform')
-        except Exception as e:
-            Log.warn(TAG, f'mDNS registration failed: {e}')
 
     def disconnect(self, reconnect):
             if (reconnect == True):

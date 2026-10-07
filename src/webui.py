@@ -284,7 +284,7 @@ footer{{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}}
         
         return self._html_template.format(
             device_name=self.api.device_name,
-            device_name_val=dc.device_name,
+            device_name_val=self.api.device_name,
             state_text=state_text,
             state_cls=state_cls,
             mode=mode,

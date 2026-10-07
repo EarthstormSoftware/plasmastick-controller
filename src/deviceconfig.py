@@ -36,6 +36,18 @@ _DEFAULT_CONFIG = {
 }
 
 
+DEVICE_NAME_FILE = "device_name.json"
+
+
+def _load_renamed_device_name():
+    """Return the name set from the web UI/API (device_name.json), if any."""
+    try:
+        with open(DEVICE_NAME_FILE) as fp:
+            return ujson.load(fp).get('name')
+    except (OSError, ValueError):
+        return None
+
+
 def _load_provisioning_data():
     """Try to load provisioning.json with WiFi credentials and optional device_name."""
     try:
@@ -55,10 +67,13 @@ def _load_provisioning_data():
 class DeviceConfig:
     
     def __init__(self, configdata):
+        # Device name priority: renamed in the web UI/API, then set during
+        # provisioning, then config.json, then generated from the board's unique id.
+        # It is used as the MQTT client id and the network hostname.
         provisioning = _load_provisioning_data()
         provisioned_name = provisioning.get('device_name') if provisioning else None
         configured_name = configdata["device"].get("device_name", "")
-        self.device_name = sanitize_device_name(provisioned_name or configured_name)
+        self.device_name = sanitize_device_name(_load_renamed_device_name() or provisioned_name or configured_name)
         self.device_led_count = configdata["device"]["device_led_count"]
         self.device_led_rgbw = configdata["device"]["device_led_rgbw"]
         self.default_mode = configdata["device"]["default_mode"]
