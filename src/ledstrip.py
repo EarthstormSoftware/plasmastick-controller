@@ -6,6 +6,9 @@ from log import Log
 
 TAG = "LEDS"
 
+# The lighting modes the strip supports.
+MODES = ('Colour', 'CheerLights', 'Rainbows')
+
 class LedStrip:
     def __init__(self, device_config):
         self.device_config = device_config

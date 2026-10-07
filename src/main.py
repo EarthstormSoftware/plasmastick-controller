@@ -106,13 +106,6 @@ class WLANManagedMQTTClient(MQTTClient):
                 self._isconnected = False
                 await asyncio.sleep(1)
 
-def set_on():    
-    led_strip.set_next_state(True)
-
-def set_off():
-    led_strip.set_next_state(False)
-
-
 # Subscription callback
 async def messages(client):
     async for topic, msg, retained in client.queue:
@@ -137,17 +130,15 @@ async def messages(client):
                 new_state = parameters.get("State")
                 if isinstance(new_state, bool):
                     if new_state:
-                        set_on()
+                        device_api.power_on()
                     else:
-                        set_off()
+                        device_api.power_off()
                 else:
                     Log.warn(TAG, 'Ignoring StateChange with non-boolean State')
 
             elif message_type == "ModeChange":
                 new_mode = parameters.get("Mode")
-                if new_mode in ('Colour', 'CheerLights', 'Rainbows'):
-                    led_strip.set_next_mode(new_mode, parameters.get("ModeParameters"))
-                else:
+                if not device_api.set_mode(new_mode, parameters.get("ModeParameters")):
                     Log.warn(TAG, 'Ignoring ModeChange with invalid Mode')
             else:
                 Log.warn(TAG, f'Ignoring unsupported control message type: {message_type}')
@@ -163,7 +154,6 @@ async def up(client):
         Log.info(TAG,'Subscribed to Control Topic')        
         
 async def down(client):
-    global outages
     while True:
         await client.down.wait()  # Pause until connectivity changes
         client.down.clear()        

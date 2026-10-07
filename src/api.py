@@ -3,6 +3,7 @@ import machine
 from log import Log
 from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
 from deviceidentity import sanitize_device_name
+from ledstrip import MODES
 
 TAG = "API"
 
@@ -83,7 +84,7 @@ class DeviceAPI:
     
     def set_mode(self, mode, parameters=None):
         """Set LED mode."""
-        if mode in ['Colour', 'CheerLights', 'Rainbows']:
+        if mode in MODES:
             if parameters:
                 self.led_strip.set_next_mode(mode, parameters)
             else:
@@ -128,8 +129,11 @@ class DeviceAPI:
         Returns (success, error_message).
         """
         try:
-            # Use cached config instead of reloading from file
-            cfg = self._config_cache
+            # Work on a copy of the cached config, so a rejected update can't leave
+            # half-applied changes behind for the next save.
+            cfg = ujson.loads(ujson.dumps(self._config_cache))
+            for section in ('device', 'wlan', 'mqtt'):
+                cfg.setdefault(section, {})
 
             dev = updates.get('device', {})
             wlan = updates.get('wlan', {})
@@ -144,7 +148,7 @@ class DeviceAPI:
             if 'device_led_rgbw' in dev:
                 cfg['device']['device_led_rgbw'] = bool(dev['device_led_rgbw'])
             if 'default_mode' in dev:
-                if dev['default_mode'] not in ('Colour', 'CheerLights', 'Rainbows'):
+                if dev['default_mode'] not in MODES:
                     return False, 'Invalid default_mode'
                 cfg['device']['default_mode'] = dev['default_mode']
             if 'mode_parameters' in dev:
@@ -196,8 +200,8 @@ class DeviceAPI:
                     return False, 'queue_len must be >= 1'
                 cfg['mqtt']['queue_len'] = v
 
-            # Write cached config back to file
             DeviceConfig.saveConfigToFile(cfg)
+            self._config_cache = cfg
             Log.info(TAG, 'Config saved.')
             return True, None
 
