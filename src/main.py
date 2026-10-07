@@ -1,0 +1,241 @@
+import uasyncio as asyncio
+import ujson
+import gc
+import mqtt_as
+from log import Log
+from deviceconfig import DeviceConfig
+from picoled import PicoLed
+from ledstrip import LedStrip
+from devicebutton import DeviceButton
+from wlan import WLAN
+from provisioning import Provisioning
+from api import DeviceAPI
+from webui import WebUI
+from httpserver import HTTPServer
+from mqtt_as import MQTTClient
+
+
+
+TAG = "MAIN"
+
+Log.set_log_level(2)
+Log.set_use_datetime(True)
+Log.start()
+Log.info(TAG,'Plasma Stick starting')
+Log.info(TAG, f'mqtt_as version: {mqtt_as.VERSION}')
+device_config = DeviceConfig.loadConfigFromFile()
+
+# Check if WiFi provisioning is needed
+if DeviceConfig.provisioning_needed():
+    Log.warn(TAG,'WiFi provisioning required. Starting AP mode.')
+    provisioning = Provisioning()
+    
+    async def run_provisioning():
+        pico_led = PicoLed()
+        asyncio.create_task(pico_led.controller())
+        pico_led.set_state(True, True, 500)  # Flash LED to indicate AP mode
+
+        success = await provisioning.run_provisioning_loop()
+        if success:
+            Log.info(TAG,'Provisioning complete. Restarting...')
+            import machine
+            machine.soft_reset()
+        else:
+            Log.error(TAG,'Provisioning failed. Falling back to config.json settings.')
+            pico_led.set_state(False, False)
+    
+    try:
+        asyncio.run(run_provisioning())
+    except KeyboardInterrupt:
+        Log.info(TAG,'Provisioning cancelled.')
+        provisioning.stop_ap()
+        import machine
+        machine.soft_reset()
+
+Log.info(TAG,'Initialising onboard LED')
+pico_led = PicoLed()
+pico_led.set_state(False, False)
+
+Log.info(TAG,'Initialising LED strip')
+led_strip = LedStrip(device_config)
+
+Log.info(TAG,'Initialising WLAN')
+wlan = WLAN(device_config, pico_led)
+
+Log.info(TAG,'Initialising API and Web UI')
+device_api = DeviceAPI(device_config, led_strip, pico_led)
+Log.info(TAG,'Initialising button')
+control_button = DeviceButton(device_config, pico_led, led_strip, device_api)
+
+# Defer WebUI and HTTPServer initialization to save memory at startup
+web_ui = None
+http_server = None
+
+
+class WLANManagedMQTTClient(MQTTClient):
+    # WLAN lifecycle is handled externally by wlan.py.
+    async def wifi_connect(self, quick=False):
+        if not self._sta_if.isconnected():
+            raise OSError('WiFi not connected')
+
+        if not quick:
+            for _ in range(3):
+                if not self._sta_if.isconnected():
+                    raise OSError('Connection unstable')
+                await asyncio.sleep(1)
+
+    async def _keep_connected(self):
+        while self._has_connected:
+            if self.isconnected():
+                await asyncio.sleep(1)
+                gc.collect()
+                continue
+
+            while self._has_connected and not self._sta_if.isconnected():
+                await asyncio.sleep(1)
+
+            if not self._has_connected:
+                break
+
+            try:
+                await self.connect()
+            except OSError as e:
+                self.dprint('Error in reconnect. %s', e)
+                self._close()
+                self._in_connect = False
+                self._isconnected = False
+                await asyncio.sleep(1)
+
+def set_on():    
+    led_strip.set_next_state(True)
+
+def set_off():
+    led_strip.set_next_state(False)
+
+
+# Subscription callback
+async def messages(client):
+    async for topic, msg, retained in client.queue:
+        try:
+            if isinstance(topic, bytes):
+                topic_text = topic.decode()
+            else:
+                topic_text = str(topic)
+
+            if isinstance(msg, bytes):
+                msg_text = msg.decode()
+            else:
+                msg_text = str(msg)
+
+            Log.info(TAG,f'Topic: "{topic_text}" Message: "{msg_text}" Retained: {retained}')
+
+            payload = ujson.loads(msg_text)
+            message_type = payload.get("MessageType")
+            parameters = payload.get("Parameters") or {}
+
+            if message_type == "StateChange":
+                new_state = parameters.get("State")
+                if isinstance(new_state, bool):
+                    if new_state:
+                        set_on()
+                    else:
+                        set_off()
+                else:
+                    Log.warn(TAG, 'Ignoring StateChange with non-boolean State')
+
+            elif message_type == "ModeChange":
+                new_mode = parameters.get("Mode")
+                if new_mode in ('Colour', 'CheerLights', 'Rainbows'):
+                    led_strip.set_next_mode(new_mode, parameters.get("ModeParameters"))
+                else:
+                    Log.warn(TAG, 'Ignoring ModeChange with invalid Mode')
+            else:
+                Log.warn(TAG, f'Ignoring unsupported control message type: {message_type}')
+        except Exception as e:
+            Log.warn(TAG, f'Ignoring malformed MQTT control payload: {e}')
+
+# If you connect with clean_session True, must re-subscribe (MQTT spec 3.1.2.4)
+async def up(client):
+    while True:
+        await client.up.wait()  # Wait on an Event
+        client.up.clear()
+        await client.subscribe(device_config.get_control_topic(), 1)    
+        Log.info(TAG,'Subscribed to Control Topic')        
+        
+async def down(client):
+    global outages
+    while True:
+        await client.down.wait()  # Pause until connectivity changes
+        client.down.clear()        
+        Log.warn(TAG,'WiFi or broker is down.')
+
+async def main(client):        
+    global web_ui, http_server
+
+    # Start long-running controllers once event loop is active.
+    asyncio.create_task(pico_led.controller())
+    asyncio.create_task(led_strip.controller())
+    asyncio.create_task(control_button.controller())
+    asyncio.create_task(wlan.controller())
+    
+    Log.info(TAG,'Waiting for WLAN connection before starting HTTP server')
+    while not wlan.is_connected():
+        await asyncio.sleep(1)
+    
+    # Now that WLAN is up, initialize WebUI and HTTP server (deferred for memory)
+    Log.info(TAG,'WLAN ready. Initialising Web UI and HTTP server')
+    gc.collect()  # Force garbage collection before allocating large structures
+    
+    try:
+        web_ui = WebUI(device_api)
+        http_server = HTTPServer(device_api, web_ui, port=80)
+        gc.collect()  # Clean up any temporary allocations
+    except Exception as e:
+        Log.error(TAG, f'Failed to initialize HTTP server: {e}')
+        return
+    
+    Log.info(TAG,'Starting HTTP server')
+    async def http_server_task():
+        try:
+            await http_server.start()
+        except Exception as e:
+            Log.error(TAG, f'HTTP server failed: {e}')
+            import traceback
+            traceback.print_exc()
+    
+    asyncio.create_task(http_server_task())
+
+    if client is None:
+        Log.warn(TAG,'MQTT is disabled (no broker configured or mqtt.enabled=false). Running HTTP/API only.')
+        while True:
+            await asyncio.sleep(5)
+
+    Log.info(TAG,'Waiting for MQTT connection')
+    while True:
+        try:
+            await client.connect()
+            Log.info(TAG,'Creating MQTT tasks')
+            for coroutine in (up, down, messages):
+                asyncio.create_task(coroutine(client))
+            break
+        except OSError:
+            Log.warn(TAG,'MQTT connection failed. Will retry once WLAN is healthy.')
+            await asyncio.sleep(2)
+
+    while True:
+        await asyncio.sleep(5)
+
+
+client = WLANManagedMQTTClient(device_config.get_mqtt_as_config()) if device_config.is_mqtt_enabled() else None
+
+
+try:
+    Log.info(TAG,'Calling main function')
+    asyncio.run(main(client))
+finally:
+    if client is not None:
+        client.close()  # Prevent LmacRxBlk:1 errors
+    asyncio.new_event_loop()
+    pico_led.set_state(False)
+    led_strip.set_off()
+   

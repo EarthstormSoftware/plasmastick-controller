@@ -1,0 +1,180 @@
+from log import Log
+import uasyncio as asyncio
+import network
+import time
+from deviceconfig import DeviceConfig, WlanConfig
+from picoled import PicoLed
+
+TAG = "WLAN"
+
+class WLAN:
+
+    # Initialiser - required
+    def __init__(self, device_config: DeviceConfig, pico_led: PicoLed):
+        
+        self.device_config = device_config
+        self.wlanconfig = device_config.get_wlanconfig()
+        self.pico_led = pico_led
+        self.pico_led.set_state(False)
+
+        self.up = asyncio.Event()
+        self.down = asyncio.Event()
+
+        # Flag to indicate current status of the WLAN connection
+        # 0 = Inactive, with no expectation to reconnect unless explicity requested.
+        # 1 = Connecting (either an explicit connection request, or a reconnect after failure)
+        # 2 = Connected (connection completed successfully)
+        # 3 = Waiting to reconnect after unexpected disconnect, or failure to connect after specified time
+        self.current_state = 0
+        
+        # Indicates the connection was previously active and working
+        self.was_connected = False
+        self.retry_count = 0
+
+        # Time when the last connect attempt started
+        self.time_last_connect_started = 0        
+        self.time_last_connect_completed = 0
+                
+        # Time when the last disconnect happened
+        self.time_last_disconnect = 0        
+        
+        Log.info(TAG,'Initialising WLAN')
+        self.wlan = network.WLAN(network.STA_IF)
+        self.connect()
+         
+
+    def connect(self):
+        
+        self.wlan.active(True)
+
+        # Only scan for Wi-Fi networks on first attempt to save time on reconnects
+        if self.retry_count == 0:
+            networks = self.wlan.scan()
+            Log.info(TAG, 'Available WiFi Networks:')
+            for network_info in networks:
+                Log.info(TAG, network_info)
+
+        # Connect to WLAN        
+        Log.info(TAG, f'Starting connection to {self.wlanconfig.ssid}')
+        self.pico_led.set_state(True, True, 1000)
+        self.current_state = 1
+        self.retry_count += 1
+        self.time_last_connect_started = time.time()
+        self.wlan.connect(self.wlanconfig.ssid, self.wlanconfig.password)
+
+    def set_connected(self):
+            self.current_state = 2
+            if (self.was_connected == False):
+                self.pico_led.set_state(True, False)
+                self.was_connected = True
+                self.retry_count = 0
+                self.up.set()
+                self.down.clear()
+                self.time_last_connect_completed = time.time()
+                ip = self.wlan.ifconfig()[0]
+                Log.info(TAG, f'Connected to {self.wlanconfig.ssid} with IP {ip}')
+                connecttime = self.time_last_connect_completed - self.time_last_connect_started
+                Log.info(TAG, f'Connection took {connecttime} seconds')
+                
+                # Register mDNS
+                self._register_mdns()
+
+    def _register_mdns(self):
+        """Register device on mDNS network."""
+        try:
+            import mdns
+            # Try to load device name from API if available
+            device_name = self.device_config.device_name
+            mdns.init(network.STA_IF, hostname=device_name)
+            Log.info(TAG, f'Registered mDNS hostname: {device_name}.local')
+        except ImportError:
+            Log.debug(TAG, 'mDNS not available on this platform')
+        except Exception as e:
+            Log.warn(TAG, f'mDNS registration failed: {e}')
+
+    def disconnect(self, reconnect):
+            if (reconnect == True):
+                self.current_state = 3
+            else:
+                self.current_state = 0
+                self.wlan.active(False)
+
+            self.time_last_disconnect = time.time()
+            if (self.was_connected == True):
+                connection_uptime = self.time_last_disconnect - self.time_last_connect_completed
+                Log.info(TAG,'WLAN connection lasted for ' + str(connection_uptime) + ' seconds') 
+
+            self.was_connected = False
+            self.up.clear()
+            self.down.set()
+            self.pico_led.set_state(False, False)                                    
+            Log.info(TAG,'WLAN disconnected') 
+
+    def is_connected(self):
+        return self.current_state == 2 and self.wlan.isconnected()
+
+    def can_retry(self):
+        return self.wlanconfig.max_retries == 0 or self.retry_count < self.wlanconfig.max_retries
+
+    # Pico WLAN Controller
+    async def controller(self):
+        
+        while True:
+
+            # If WLAN is connected, all is well with the world.
+            if (self.wlan.isconnected() == True and self.was_connected == False):
+                self.set_connected()                
+            elif (self.wlan.isconnected() == False):
+                
+                current_time = time.time()
+
+                # WLAN is not connected, but a connection attempt is/was in progress
+                if self.current_state == 1:
+                    # check how long we have been connecting for, and timeout if needed.
+                    # Check retry count and set reconnect if we haven't reached the limit
+                    # If we have reached the limit, set the state to Inactive.
+
+                    # Still connecting - check connection time out
+                    if (self.wlan.status() == network.STAT_CONNECTING):
+                        
+                        # Double check to avoid a tiny timing window
+                        if (self.wlan.isconnected() == True):
+                            self.set_connected() 
+                        else:
+                            if (current_time - self.time_last_connect_started > self.wlanconfig.connect_timeout):
+                                if self.can_retry():
+                                    self.disconnect(True)
+                                else:
+                                    self.disconnect(False)
+                                    Log.error(TAG,'WLAN connect timed out and max retries reached.')
+                    elif (self.wlan.status() == network.STAT_GOT_IP):
+                        self.set_connected()
+                    else:
+                        Log.error(TAG,'WLAN failed to connect, state: ' + str(self.wlan.status()))
+                        if self.can_retry():
+                            self.disconnect(True)
+                        else:
+                            self.disconnect(False)
+                            Log.error(TAG,'WLAN failed and max retries reached.')
+                                       
+                # WLAN is not connected, but we are waiting to trigger a reconnect
+                elif self.current_state == 3:
+                    # Check how long we have been waiting, and if the retry interval has been reached, trigger the new connect attempt 
+                    if (current_time - self.time_last_disconnect > self.wlanconfig.reconnect_wait):
+                        if self.can_retry():
+                            self.connect()
+                        else:
+                            self.current_state = 0
+                            Log.warn(TAG,'Reconnect disabled because max retries reached.')
+
+                # WLAN is not connected, but we thought it was. 
+                elif self.current_state == 2:                    
+                    self.disconnect(True)
+
+                # WLAN inactive: start/continue reconnect policy in this class.
+                elif self.current_state == 0 and self.can_retry():
+                    self.connect()
+                    
+            # Always yield at the end to give way to other tasks        
+            await asyncio.sleep_ms(200)
+

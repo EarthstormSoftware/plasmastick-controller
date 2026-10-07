@@ -1,0 +1,5 @@
+# Host-side tooling for working on the firmware (not deployed to the device).
+# Install into a venv:  py -m venv .venv ; .venv\Scripts\pip install -r requirements-dev.txt
+mpremote
+mpy-cross  # keep its major.minor in line with the device firmware (bytecode format must match)
+micropython-rp2-rpi_pico_w-stubs

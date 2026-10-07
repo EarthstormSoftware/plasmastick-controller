@@ -1,0 +1,26 @@
+# Device-local config and credentials (use config.example.json as the template)
+config.json
+provisioning.json
+device_name.json
+
+# Build output (mpy-cross)
+build/
+
+# Python
+.venv*/
+__pycache__/
+*.pyc
+
+# Stubs (installed via requirements-dev.txt, not committed)
+typings/
+
+# Logs and backups
+*.log
+_backup_mqtt_as/
+*.bak
+
+# Editors
+.idea/
+*.swp
+*.swo
+*~

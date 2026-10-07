@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# Windows scripts keep CRLF
+*.ps1 text eol=crlf
+
+*.mpy binary
+*.uf2 binary
+*.png binary
+*.jpg binary
