@@ -18,7 +18,8 @@ TAG = "MAIN"
 Log.set_log_level(1)  # until config.json's device.log_level is loaded
 Log.set_use_datetime(True)
 Log.start()
-Log.info(TAG,'Plasma Stick starting')
+from version import VERSION
+Log.info(TAG, f'Plasma Stick starting, firmware {VERSION}')
 device_config = DeviceConfig.loadConfigFromFile()
 Log.set_log_level(device_config.log_level)
 
@@ -57,6 +58,12 @@ control_button = DeviceButton(device_config, pico_led, led_strip, device_api)
 http_server = None
 
 
+def mqtt_error_text(e):
+    # CONNACK codes 4 and 5 are the broker rejecting the login.
+    if 'code 0x4' in str(e) or 'code 0x5' in str(e):
+        return 'The broker rejected the login. Check the MQTT user and password.'
+    return f'Could not connect to the broker ({e}).'
+
 def create_mqtt_client():
     import mqtt_as
     Log.info(TAG, f'mqtt_as version: {mqtt_as.VERSION}')
@@ -90,6 +97,7 @@ def create_mqtt_client():
                     await self.connect()
                 except OSError as e:
                     self.dprint('Error in reconnect. %s', e)
+                    device_api.mqtt_error = mqtt_error_text(e)
                     self._close()
                     self._in_connect = False
                     self._isconnected = False
@@ -167,13 +175,14 @@ async def up(client):
     while True:
         await client.up.wait()  # Wait on an Event
         client.up.clear()
+        device_api.mqtt_error = None
         await client.subscribe(device_config.get_control_topic(), 1)
         Log.info(TAG,'Subscribed to Control Topic')
         if ha:
             await client.subscribe(t['ha_set'], 1)
         await client.publish(t['status'], mqttstate.ONLINE, retain=True)
         # With discovery off, an empty retained config removes any earlier one.
-        discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, MODES) if ha else ''
+        discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, MODES, VERSION) if ha else ''
         await client.publish(t['ha_config'], discovery, retain=True)
         led_strip.changed.set()  # publish the current state now that we're connected
 
@@ -256,13 +265,13 @@ async def main(client):
         try:
             await client.connect()
             Log.info(TAG,'Creating MQTT tasks')
+            device_api.mqtt_error = None
             for coroutine in (up, down, messages, publish_state):
                 asyncio.create_task(coroutine(client))
             break
         except OSError as e:
-            # CONNACK codes 4 and 5 are the broker rejecting the login.
-            hint = ' Check the MQTT user and password.' if 'code 0x4' in str(e) or 'code 0x5' in str(e) else ''
-            Log.warn(TAG, f'MQTT connection failed ({e}).{hint} Will retry once WLAN is healthy.')
+            device_api.mqtt_error = mqtt_error_text(e)
+            Log.warn(TAG, f'MQTT connection failed ({e}): {device_api.mqtt_error} Will retry once WLAN is healthy.')
             await asyncio.sleep(2)
 
     while True:
@@ -270,6 +279,7 @@ async def main(client):
 
 
 client = create_mqtt_client() if device_config.is_mqtt_enabled() else None
+device_api.mqtt_client = client
 
 
 try:

@@ -9,9 +9,14 @@ body{font-family:system-ui,sans-serif;background:#667eea;min-height:100vh;paddin
 .card{background:#fff;border-radius:12px;width:100%;max-width:500px;overflow:hidden}
 header{padding:20px 20px 0;text-align:center}
 h1{font-size:21px;color:#333;margin-bottom:6px}
-.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px}
-.on{background:#4caf50;color:#fff}
-.off{background:#f44336;color:#fff}
+.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:#e4e6eb;color:#3a3f4b}
+.badge.on{background:#4caf50;color:#fff}
+/* Health chips and problem banner */
+.health{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 2px}
+.chip{font-size:12px;padding:3px 9px;border-radius:10px;background:#f1f3f9;color:#3a3f4b}
+.chip.ok{background:#e7f5e8;color:#1e6b23}
+.chip.bad{background:#fdecea;color:#a12622}
+.alert{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:#fdecea;color:#a12622;font-size:13px;text-align:left}
 /* CSS-only tabs - radio inputs drive panel visibility */
 input[name=t]{display:none}
 nav{display:flex;border-bottom:2px solid #eee}
@@ -22,21 +27,24 @@ nav label:hover{color:#555}
 #td:checked~nav label[for=td],
 #tn:checked~nav label[for=tn]{color:#667eea;border-bottom-color:#667eea}
 #tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn{display:block}
-/* CSS-only mode tabs */
-input[name=m]{display:none}
-.mtabs{display:flex;gap:6px;margin-bottom:12px}
-.mtabs label{flex:1;padding:8px;text-align:center;border:1.5px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#888;transition:.15s}
-.mpane{display:none}
-#mc:checked~.mtabs label[for=mc],
-#mr:checked~.mtabs label[for=mr],
-#mh:checked~.mtabs label[for=mh]{border-color:#667eea;background:#667eea;color:#fff}
-#mc:checked~#mpc,#mr:checked~#mpr,#mh:checked~#mph{display:block}
+/* Mode buttons */
+.modes{display:flex;gap:6px;margin-bottom:12px}
+.modes button{flex:1;padding:9px 6px;border:1.5px solid #ddd;border-radius:7px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#555}
+.modes button[aria-pressed=true]{border-color:#667eea;background:#667eea;color:#fff}
+.crow label{font-size:13px;color:#555}
+/* Power switch: a plain Toggle button without script, a switch with it */
+.power{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.power .sec{margin:0}
+.switch{padding:8px 16px;border:none;border-radius:7px;background:#667eea;color:#fff;font-weight:700;cursor:pointer}
+.js .switch{position:relative;width:58px;height:32px;padding:0;border-radius:16px;background:#c5c9d3;transition:.15s}
+.js .switch::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s}
+.js .switch[aria-checked=true]{background:#4caf50}
+.js .switch[aria-checked=true]::after{left:30px}
+.js .switch-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.msg{font-size:12px;color:#a12622;min-height:16px;margin-top:4px}
 /* Sections */
 .sec{font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
 .sec:first-child{margin-top:0}
-/* Power row - inline forms */
-.prow{display:flex;gap:8px;margin-bottom:4px}
-.prow form{flex:1}
 /* Generic inputs */
 .frow{display:flex;gap:8px;margin-bottom:8px}
 .field{flex:1;display:flex;flex-direction:column;gap:3px}
@@ -47,10 +55,6 @@ input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid #ddd;bor
 .crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .crow input[type=text]{flex:1}
 /* Buttons */
-.btn{width:100%;padding:10px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
-.grn{background:#4caf50;color:#fff}
-.red{background:#f44336;color:#fff}
-.blu{background:#667eea;color:#fff}
 .btn-full:disabled{opacity:.5;cursor:default}
 .btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:#667eea;color:#fff}
 footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
@@ -61,7 +65,9 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
 <header>
   <h1 id="name">PlasmaStick</h1>
   <span class="badge" id="state">Loading&hellip;</span>
+  <div class="health" id="health"></div>
 </header>
+<div class="alert" id="alert" role="alert" hidden></div>
 
 <input type="radio" name="t" id="tc" checked>
 <input type="radio" name="t" id="td">
@@ -73,44 +79,27 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
 </nav>
 
 <!-- CONTROL PANEL -->
+<!-- Plain forms, so the controls still work without script; the script below
+     takes them over to act without reloading the page. -->
 <div class="pane" id="pc">
-  <div class="sec">Power</div>
-  <div class="prow">
-    <form action="/api/power/on" method="post"><button class="btn grn">ON</button></form>
-    <form action="/api/power/off" method="post"><button class="btn red">OFF</button></form>
-    <form action="/api/power/toggle" method="post"><button class="btn blu">Toggle</button></form>
-  </div>
+  <form class="power" id="power_form" action="/api/power/toggle" method="post">
+    <div class="sec">Power</div>
+    <button type="submit" class="switch" id="power" role="switch" aria-checked="false" aria-label="Lights on"><span class="switch-text">Toggle</span></button>
+  </form>
 
   <div class="sec">Mode</div>
-  <input type="radio" name="m" id="mc" checked>
-  <input type="radio" name="m" id="mr">
-  <input type="radio" name="m" id="mh">
-  <div class="mtabs">
-    <label for="mc">Colour</label>
-    <label for="mr">Rainbows</label>
-    <label for="mh">CheerLights</label>
-  </div>
-  <div class="mpane" id="mpc">
-    <form action="/api/mode" method="post">
-      <input type="hidden" name="mode" value="Colour">
-      <div class="crow">
-        <input type="color" name="colour" id="colour" value="#ffffff">
-        <button class="btn blu" style="flex:1">Apply Colour</button>
-      </div>
-    </form>
-  </div>
-  <div class="mpane" id="mpr">
-    <form action="/api/mode" method="post">
-      <input type="hidden" name="mode" value="Rainbows">
-      <button class="btn blu">Apply Rainbows</button>
-    </form>
-  </div>
-  <div class="mpane" id="mph">
-    <form action="/api/mode" method="post">
-      <input type="hidden" name="mode" value="CheerLights">
-      <button class="btn blu">Apply CheerLights</button>
-    </form>
-  </div>
+  <form id="mode_form" action="/api/mode" method="post">
+    <div class="modes" role="group" aria-label="Mode">
+      <button type="submit" name="mode" value="Colour" aria-pressed="false">Colour</button>
+      <button type="submit" name="mode" value="Rainbows" aria-pressed="false">Rainbows</button>
+      <button type="submit" name="mode" value="CheerLights" aria-pressed="false">CheerLights</button>
+    </div>
+    <div class="crow" id="colour_row">
+      <input type="color" name="colour" id="colour" value="#ffffff">
+      <label for="colour" id="colour_text">Colour</label>
+    </div>
+  </form>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
 </div>
 
 <!-- DEVICE PANEL -->
@@ -265,34 +254,151 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
   </form>
 </div>
 
-<footer><span id="footer_name"></span> &bull; PlasmaStick</footer>
+<footer><span id="footer_name"></span> &bull; PlasmaStick <span id="footer_info"></span></footer>
 </div>
 <script>
 // Values are set with .value / .textContent, never as HTML, so names and URLs
-// can't inject markup. Save stays disabled until everything has loaded, so a
-// form can't post empty fields over the real config.
+// can't inject markup. Save stays disabled until the settings have loaded, so
+// a form can't post empty fields over the real config.
+document.documentElement.className = 'js';
 function el(id) { return document.getElementById(id); }
 function sel(id, v) { el(id).value = String(v); }
-Promise.all([fetch('/api/info'), fetch('/api/config')])
-  .then(function (r) {
-    if (!r[0].ok || !r[1].ok) throw new Error('HTTP ' + r[0].status + '/' + r[1].status);
-    return Promise.all([r[0].json(), r[1].json()]);
-  })
-  .then(function (d) {
-    var info = d[0], dev = d[1].device, wl = d[1].wlan, mq = d[1].mqtt;
-    document.title = info.name;
-    el('name').textContent = info.name;
-    el('footer_name').textContent = info.name;
-    var st = el('state');
-    st.textContent = 'Status: ' + (info.state ? 'ON' : 'OFF');
-    st.className = 'badge ' + (info.state ? 'on' : 'off');
-    var modeIds = { Colour: 'mc', Rainbows: 'mr', CheerLights: 'mh' };
-    if (modeIds[info.mode]) el(modeIds[info.mode]).checked = true;
+var info = null;
+var colourSending = false, pendingColour = null;
+var modeButtons = document.querySelectorAll('.modes button');
+
+function post(path, body) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+}
+
+function say(text) { el('msg').textContent = text || ''; }
+
+function duration(s) {
+  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + m + 'm' : m + 'm';
+}
+
+function chip(text, cls) {
+  var c = document.createElement('span');
+  c.className = 'chip' + (cls ? ' ' + cls : '');
+  c.textContent = text;
+  return c;
+}
+
+function render(i) {
+  info = i;
+  document.title = i.name;
+  el('name').textContent = i.name;
+  el('footer_name').textContent = i.name;
+  if (!el('device_name').value) el('device_name').value = i.name;
+  el('footer_info').textContent = '\u2022 v' + i.version + ' \u2022 up ' + duration(i.uptime_s) +
+    ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
+  var st = el('state');
+  st.textContent = i.state ? 'On' : 'Off';
+  st.className = 'badge' + (i.state ? ' on' : '');
+  el('power').setAttribute('aria-checked', i.state ? 'true' : 'false');
+  modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === i.mode ? 'true' : 'false'); });
+  el('colour_row').hidden = i.mode !== 'Colour';
+  // Don't overwrite a colour while it's being picked.
+  if (i.colour && !colourSending && !pendingColour && document.activeElement !== el('colour')) {
+    el('colour').value = i.colour.toLowerCase();
+  }
+  el('colour_text').textContent = i.mode === 'CheerLights' && i.colour ? 'CheerLights: ' + i.colour : 'Pick a colour';
+
+  var health = el('health'), problems = [];
+  health.textContent = '';
+  var r = i.wifi.rssi;
+  if (r === null) {
+    health.appendChild(chip('Wi-Fi'));
+  } else {
+    var q = r > -60 ? 'strong' : r > -70 ? 'good' : r > -80 ? 'weak' : 'very weak';
+    health.appendChild(chip('Wi-Fi ' + q + ' (' + r + ' dBm)', r > -80 ? 'ok' : 'bad'));
+  }
+  if (!i.mqtt.enabled) {
+    health.appendChild(chip('MQTT off'));
+  } else if (i.mqtt.connected) {
+    health.appendChild(chip('MQTT connected', 'ok'));
+  } else {
+    health.appendChild(chip('MQTT not connected', 'bad'));
+    problems.push('MQTT is not connected' + (i.mqtt.error ? ': ' + i.mqtt.error : '.'));
+  }
+  showAlert(problems.join(' '));
+}
+
+function showAlert(text) {
+  el('alert').textContent = text;
+  el('alert').hidden = !text;
+}
+
+function refresh() {
+  return fetch('/api/info')
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(render)
+    .catch(function () { showAlert("Can't reach the device. It may be restarting; this page keeps trying."); });
+}
+
+// Act, then re-read the device's state once the LED controller has applied it.
+function act(path, body) {
+  say('');
+  return post(path, body)
+    .catch(function (e) { say(e.message); })
+    .then(function () { setTimeout(refresh, 300); });
+}
+
+el('power').addEventListener('click', function (e) {
+  e.preventDefault();
+  var on = !(info && info.state);
+  el('power').setAttribute('aria-checked', on ? 'true' : 'false');  // show it straight away
+  act('/api/power/' + (on ? 'on' : 'off'));
+});
+
+modeButtons.forEach(function (b) {
+  b.addEventListener('click', function (e) {
+    e.preventDefault();
+    modeButtons.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+    el('colour_row').hidden = b.value !== 'Colour';
+    var body = { mode: b.value };
+    if (b.value === 'Colour') body.parameters = { Colour: el('colour').value };
+    act('/api/mode', body);
+  });
+});
+
+// Apply colours while picking, at most one request at a time.
+function sendColour() {
+  colourSending = true;
+  var c = pendingColour;
+  pendingColour = null;
+  post('/api/mode', { mode: 'Colour', parameters: { Colour: c } })
+    .catch(function (e) { say(e.message); })
+    .then(function () {
+      colourSending = false;
+      if (pendingColour) setTimeout(sendColour, 100);
+      else setTimeout(refresh, 300);
+    });
+}
+el('colour').addEventListener('input', function () {
+  say('');
+  pendingColour = el('colour').value;
+  if (!colourSending) sendColour();
+});
+
+refresh();
+setInterval(function () { if (!document.hidden) refresh(); }, 3000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+
+fetch('/api/config')
+  .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .then(function (cfg) {
+    var dev = cfg.device, wl = cfg.wlan, mq = cfg.mqtt;
     var colour = (dev.mode_parameters && dev.mode_parameters.Colour) || '#ffffff';
-    el('colour').value = colour;
-    el('default_colour').value = colour;
+    el('default_colour').value = colour.toLowerCase();
     el('default_colour_text').textContent = colour;
-    el('device_name').value = info.name;
     el('device_led_count').value = dev.device_led_count;
     sel('device_led_rgbw', !!dev.device_led_rgbw);
     sel('default_state', !!dev.default_state);
@@ -310,14 +416,10 @@ Promise.all([fetch('/api/info'), fetch('/api/config')])
     el('queue_len').value = mq.queue_len;
     sel('clean', !!mq.clean);
     sel('ha_discovery', !!mq.ha_discovery);
-    el('web_password_state').textContent = d[1].web && d[1].web.password_set ? 'set' : 'none set';
+    el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';
     document.querySelectorAll('.save').forEach(function (b) { b.disabled = false; });
   })
-  .catch(function (e) {
-    var st = el('state');
-    st.textContent = 'Could not load settings (' + e.message + '). Reload to try again.';
-    st.className = 'badge off';
-  });
+  .catch(function (e) { showAlert('Could not load the settings (' + e.message + '). Reload to try again.'); });
 </script>
 </body>
 </html>

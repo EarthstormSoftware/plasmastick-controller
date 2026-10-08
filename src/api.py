@@ -1,11 +1,14 @@
 import gc
+import time
 import ujson
 import machine
+import network
 from log import Log
 from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
 from deviceidentity import sanitize_device_name
 from ledstrip import MODES, mode_parameters_error
 from asynchttp import parse_url
+from version import VERSION
 
 TAG = "API"
 
@@ -28,6 +31,11 @@ class DeviceAPI:
         self._config_cache = ujson.loads(ujson.dumps(device_config.configdata))
         # Checked on every HTTP request; updated as soon as a new one is saved.
         self.web_password = device_config.web_password
+        self._started = time.time()
+        # Set by main.py: the MQTT client (None when MQTT is off) and the last
+        # connection error, so the web UI can show why MQTT isn't connected.
+        self.mqtt_client = None
+        self.mqtt_error = None
     
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
@@ -49,14 +57,29 @@ class DeviceAPI:
             return False
     
     def get_device_info(self):
-        """Return device info as dict."""
+        """Return device info and health as dict."""
         gc.collect()  # so mem_free is live data, not live data plus garbage
+        sta = network.WLAN(network.STA_IF)
+        try:
+            rssi = sta.status('rssi') if sta.isconnected() else None
+        except (OSError, ValueError):
+            rssi = None
+        client = self.mqtt_client
         return {
             'name': self.device_name,
             'device_id': self.device_config.device_name,
+            'version': VERSION,
             'state': self.led_strip.current_state,
             'mode': self.led_strip.current_mode,
+            'colour': self.led_strip.current_colour,
             'led_count': self.device_config.device_led_count,
+            'uptime_s': time.time() - self._started,
+            'wifi': {'ssid': self.device_config.wlanconfig.ssid, 'ip': sta.ifconfig()[0], 'rssi': rssi},
+            'mqtt': {
+                'enabled': client is not None,
+                'connected': bool(client and client.isconnected()),
+                'error': self.mqtt_error,
+            },
             'mem_free': gc.mem_free(),
             'mem_alloc': gc.mem_alloc(),
         }

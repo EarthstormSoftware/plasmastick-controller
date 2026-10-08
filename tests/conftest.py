@@ -7,6 +7,7 @@ touches hardware or the network is still checked on the device.
 """
 import asyncio
 import binascii
+import gc
 import hashlib
 import json
 import os
@@ -36,6 +37,10 @@ sys.modules['uhashlib'] = hashlib
 time.ticks_ms = lambda: int(time.monotonic() * 1000)
 time.ticks_diff = lambda a, b: a - b
 time.sleep_ms = lambda ms: time.sleep(ms / 1000)
+
+# MicroPython's heap figures.
+gc.mem_free = lambda: 120000
+gc.mem_alloc = lambda: 76000
 
 
 class _Pin:
@@ -78,6 +83,9 @@ class _WLAN:
 
     def isconnected(self):
         return False
+
+    def status(self, param=None):
+        return -52 if param == 'rssi' else 0
 
 
 _module('network', WLAN=_WLAN, STA_IF=0, AP_IF=1, STAT_CONNECTING=1, STAT_GOT_IP=3,

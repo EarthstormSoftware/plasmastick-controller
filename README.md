@@ -16,7 +16,9 @@ API, MQTT, or the button on the board.
   just wait. If Wi-Fi hasn't connected after 5 attempts since boot (about 2-3 minutes), the device restarts into
   setup mode by itself. Either way it keeps its saved settings until new ones are submitted, and if setup mode times
   out it carries on with them, so a router that was slow to start after a power cut is still joined.
-- Web UI and JSON HTTP API on port 80. An optional web password (Network tab) protects both with HTTP Basic auth
+- Web UI and JSON HTTP API on port 80. The UI acts without reloading, keeps up with changes made elsewhere (Home
+  Assistant, MQTT, the button), and shows the device's health: Wi-Fi signal, MQTT connection (with the reason if it
+  isn't connected), firmware version, uptime and free memory, all from `/api/info`. An optional web password (Network tab) protects both with HTTP Basic auth
   (any username; `curl -u any:password`). It's sent unencrypted over your network, so it keeps out other people
   on the network rather than a determined attacker. Completing setup mode removes it, if it's forgotten. POSTs
   that a browser sends from another website's page are refused either way, so a malicious page can't control the

@@ -113,3 +113,22 @@ def test_log_level_is_saved_and_checked(api):
     assert api.save_config({'device': {'log_level': 0}}) == (True, None)
     assert saved_config(api)['device']['log_level'] == 0
     assert api.get_config()['device']['log_level'] == 1  # the running level changes on restart
+
+
+def test_info_reports_health(api):
+    info = api.get_device_info()
+    assert info['version']
+    assert info['colour'] is None  # nothing painted yet
+    assert info['uptime_s'] >= 0
+    assert info['wifi'] == {'ssid': '', 'ip': '192.168.4.1', 'rssi': None}  # not connected
+    assert info['mqtt'] == {'enabled': False, 'connected': False, 'error': None}
+    assert info['mem_free'] == 120000
+
+
+def test_info_reports_mqtt_problems(api):
+    class Client:
+        def isconnected(self):
+            return False
+    api.mqtt_client = Client()
+    api.mqtt_error = "(-1, 'CONNACK reason code 0x5'). Check the MQTT user and password."
+    assert api.get_device_info()['mqtt'] == {'enabled': True, 'connected': False, 'error': api.mqtt_error}
