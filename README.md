@@ -40,8 +40,9 @@ Connect the Plasma Stick over USB and run:
 .\scripts\deploy.ps1
 ```
 
-The script compiles `microdot` to bytecode, copies `src/` to the device (libraries into `/lib`), checks that
-everything arrived, and soft-resets the board.
+The script compiles everything except `main.py` to bytecode (`.mpy`, which saves the device compiling it in RAM),
+copies it to the device (libraries into `/lib`), checks that everything arrived, and soft-resets the board. Keep
+`mpy-cross`'s version in line with the device firmware, or the device can't load the `.mpy` files.
 
 | Option | Effect |
 |---|---|

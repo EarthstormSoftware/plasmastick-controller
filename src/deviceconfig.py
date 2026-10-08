@@ -1,7 +1,6 @@
 from log import Log
 import ujson
 import machine
-from mqtt_as import config as mqtt_config
 from wificrypto import decrypt_password
 from deviceidentity import sanitize_device_name
 
@@ -189,6 +188,7 @@ class MQTTConfig:
         return bool(self.enabled) and bool(self.broker_address)
 
     def to_mqtt_as_config(self):
+        from mqtt_as import config as mqtt_config  # only loaded when MQTT is used
         cfg = mqtt_config.copy()
         cfg["client_id"] = self.client_id
         cfg["server"] = self.broker_address

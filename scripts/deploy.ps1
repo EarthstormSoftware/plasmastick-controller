@@ -175,22 +175,39 @@ function Assert-DeviceReachable {
     }
 }
 
-# Compile microdot.py -> build/lib/microdot.mpy before deploying to save heap on device
-$microdotPy  = Join-Path $srcDir 'lib/microdot.py'
+# Everything except main.py is precompiled to .mpy. Importing a .py makes the
+# device compile it in RAM, which spikes heap use at boot and leaves it
+# fragmented. main.py must stay a .py, because MicroPython only runs main.py.
+function Compress-ToMpy {
+    param([string]$Source, [string]$Destination)
+    New-Item -ItemType Directory -Force (Split-Path -Parent $Destination) | Out-Null
+    $mxResult = py -m mpy_cross -march=armv6m $Source -o $Destination 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "mpy-cross failed for ${Source}: $mxResult" }
+}
+
+$buildDeviceDir = Join-Path $buildDir 'device'
 $buildLibDir = Join-Path $buildDir 'lib'
-$microdotMpy = Join-Path $buildLibDir 'microdot.mpy'
-New-Item -ItemType Directory -Force $buildLibDir | Out-Null
-Write-Host 'Compiling microdot.py to microdot.mpy...'
-$mxResult = py -m mpy_cross -march=armv6m $microdotPy -o $microdotMpy 2>&1
-if ($LASTEXITCODE -ne 0) { throw "mpy-cross failed: $mxResult" }
-Write-Host "microdot.mpy compiled ($([int](Get-Item $microdotMpy).Length / 1024) KB)"
+if (Test-Path $buildDeviceDir) { Remove-Item -Recurse -Force $buildDeviceDir }
 
 # Every top-level .py in src/ is device code and goes to the device root.
-$runtimePythonFiles = @(Get-ChildItem -Path $srcDir -Filter '*.py' -File | ForEach-Object { $_.Name })
+$moduleNames = @(Get-ChildItem -Path $srcDir -Filter '*.py' -File | Where-Object { $_.Name -ne 'main.py' } | ForEach-Object { $_.BaseName })
+Write-Host "Compiling $($moduleNames.Count) modules and libraries to .mpy..."
+foreach ($name in $moduleNames) {
+    Compress-ToMpy -Source (Join-Path $srcDir "$name.py") -Destination (Join-Path $buildDeviceDir "$name.mpy")
+}
+$runtimeFiles = @{ (Join-Path $srcDir 'main.py') = ':/main.py' }
+foreach ($name in $moduleNames) {
+    $runtimeFiles[(Join-Path $buildDeviceDir "$name.mpy")] = ":/$name.mpy"
+}
 
 # Libraries live in /lib on the device (on MicroPython's default sys.path).
-$libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy' }
-$mqttAsLocalDir = Join-Path $srcDir 'lib/mqtt_as'
+$microdotMpy = Join-Path $buildLibDir 'microdot.mpy'
+$mqttAsMpy = Join-Path $buildLibDir 'mqtt_as/__init__.mpy'
+Compress-ToMpy -Source (Join-Path $srcDir 'lib/microdot.py') -Destination $microdotMpy
+Compress-ToMpy -Source (Join-Path $srcDir 'lib/mqtt_as/__init__.py') -Destination $mqttAsMpy
+$libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy'; $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
+$totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
+Write-Host "Compiled ($totalKb KB to copy)"
 
 # config.json holds settings saved from the web UI, so it is only pushed when the
 # device has none, or when -ResetConfig is given. A local config.json (gitignored)
@@ -200,10 +217,14 @@ if (-not (Test-Path $localConfig)) {
     $localConfig = Join-Path $projectRoot 'config.example.json'
 }
 
-$requiredRemoteFiles = @($runtimePythonFiles | ForEach-Object { ":/$_" })
-$requiredRemoteFiles += @(':/lib/microdot.mpy', ':/lib/mqtt_as/__init__.py', ':/config.json')
+$requiredRemoteFiles = @($runtimeFiles.Values) + @($libFilesToDeploy.Values) + @(':/config.json')
 
-$remoteFilesToRemove = @($runtimePythonFiles | ForEach-Object { ":/$_" })
+# Remove both forms of every module first: a stale .py next to a fresh .mpy
+# would be imported instead of it, because MicroPython looks for .py first.
+$remoteFilesToRemove = @(':/main.py')
+foreach ($name in $moduleNames) {
+    $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
+}
 $remoteFilesToRemove += ':/lib/microdot.mpy'
 
 # Remove files left by older deploys. Root copies of libraries would shadow /lib,
@@ -260,19 +281,16 @@ foreach ($remoteDir in $remoteDirsToRemove) {
 }
 
 Write-Host 'Copying firmware files...'
-foreach ($file in $runtimePythonFiles) {
-    Invoke-MpRemote -Args @('fs', 'cp', (Join-Path $srcDir $file), ":/$file") | Out-Null
+foreach ($localPath in $runtimeFiles.Keys) {
+    Invoke-MpRemote -Args @('fs', 'cp', $localPath, $runtimeFiles[$localPath]) | Out-Null
 }
 
 Write-Host 'Copying libraries...'
 Invoke-MpRemote -Args @('fs', 'mkdir', ':/lib') -AllowFailure | Out-Null
+Invoke-MpRemote -Args @('fs', 'mkdir', ':/lib/mqtt_as') -AllowFailure | Out-Null
 foreach ($localPath in $libFilesToDeploy.Keys) {
     Invoke-MpRemote -Args @('fs', 'cp', $localPath, $libFilesToDeploy[$localPath]) | Out-Null
 }
-if (-not (Test-Path $mqttAsLocalDir)) {
-    throw "Missing local directory: $mqttAsLocalDir"
-}
-Invoke-MpRemote -Args @('fs', 'cp', '-r', $mqttAsLocalDir, ':/lib/') | Out-Null
 
 $configDeployed = $false
 if ($ResetConfig -or @(Get-MissingRemotePaths -RemotePaths @(':/config.json')).Count -gt 0) {
@@ -299,7 +317,7 @@ $deployEnd = Get-Date
 $durationSeconds = [int]($deployEnd - $deployStart).TotalSeconds
 $summaryPort = if ($SelectedPort) { $SelectedPort } else { 'auto' }
 Write-Host 'Deploy complete.'
-Write-Host "Summary: port=$summaryPort, files=$($runtimePythonFiles.Count), config=$configDeployed, verified=$($requiredRemoteFiles.Count), reset=$($SkipReset -eq $false), duration=${durationSeconds}s"
+Write-Host "Summary: port=$summaryPort, files=$($runtimeFiles.Count), config=$configDeployed, verified=$($requiredRemoteFiles.Count), reset=$($SkipReset -eq $false), duration=${durationSeconds}s"
 Write-Host "DEPLOY_SUCCESS $($deployEnd.ToString('s'))"
 if ($PreserveProvisioning -and -not $Wipe) {
     Write-Host 'Provisioning files were preserved. Use -PreserveProvisioning:$false to wipe provisioning/device name.'

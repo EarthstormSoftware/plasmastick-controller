@@ -20,7 +20,7 @@
 
 ## Build And Test
 - There is no local build system or pytest suite in this repository; verification is primarily runtime smoke testing on device.
-- Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles microdot to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed.
+- Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles everything except `main.py`, including `src/lib/`, to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed.
 - `tools/diagnostics/` holds on-device diagnostic scripts (run with `mpremote run`), not automated tests.
 - For mqtt_as upgrades and rollback/testing commands, follow `docs/mqtt_as_maintenance.md`.
 - Minimum validation after behavior changes:

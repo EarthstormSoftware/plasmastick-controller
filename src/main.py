@@ -1,18 +1,16 @@
 import uasyncio as asyncio
 import ujson
 import gc
-import mqtt_as
 from log import Log
 from deviceconfig import DeviceConfig
 from picoled import PicoLed
 from ledstrip import LedStrip
 from devicebutton import DeviceButton
 from wlan import WLAN
-from provisioning import Provisioning
 from api import DeviceAPI
 from webui import WebUI
 from httpserver import HTTPServer
-from mqtt_as import MQTTClient
+# provisioning and mqtt_as are imported only when needed, to save heap.
 
 
 
@@ -22,12 +20,12 @@ Log.set_log_level(2)
 Log.set_use_datetime(True)
 Log.start()
 Log.info(TAG,'Plasma Stick starting')
-Log.info(TAG, f'mqtt_as version: {mqtt_as.VERSION}')
 device_config = DeviceConfig.loadConfigFromFile()
 
 # Check if WiFi provisioning is needed
 if DeviceConfig.provisioning_needed():
     Log.warn(TAG,'WiFi provisioning required. Starting AP mode.')
+    from provisioning import Provisioning
     provisioning = Provisioning()
     
     async def run_provisioning():
@@ -72,39 +70,45 @@ web_ui = None
 http_server = None
 
 
-class WLANManagedMQTTClient(MQTTClient):
-    # WLAN lifecycle is handled externally by wlan.py.
-    async def wifi_connect(self, quick=False):
-        if not self._sta_if.isconnected():
-            raise OSError('WiFi not connected')
+def create_mqtt_client():
+    import mqtt_as
+    Log.info(TAG, f'mqtt_as version: {mqtt_as.VERSION}')
 
-        if not quick:
-            for _ in range(3):
-                if not self._sta_if.isconnected():
-                    raise OSError('Connection unstable')
-                await asyncio.sleep(1)
+    class WLANManagedMQTTClient(mqtt_as.MQTTClient):
+        # WLAN lifecycle is handled externally by wlan.py.
+        async def wifi_connect(self, quick=False):
+            if not self._sta_if.isconnected():
+                raise OSError('WiFi not connected')
 
-    async def _keep_connected(self):
-        while self._has_connected:
-            if self.isconnected():
-                await asyncio.sleep(1)
-                gc.collect()
-                continue
+            if not quick:
+                for _ in range(3):
+                    if not self._sta_if.isconnected():
+                        raise OSError('Connection unstable')
+                    await asyncio.sleep(1)
 
-            while self._has_connected and not self._sta_if.isconnected():
-                await asyncio.sleep(1)
+        async def _keep_connected(self):
+            while self._has_connected:
+                if self.isconnected():
+                    await asyncio.sleep(1)
+                    gc.collect()
+                    continue
 
-            if not self._has_connected:
-                break
+                while self._has_connected and not self._sta_if.isconnected():
+                    await asyncio.sleep(1)
 
-            try:
-                await self.connect()
-            except OSError as e:
-                self.dprint('Error in reconnect. %s', e)
-                self._close()
-                self._in_connect = False
-                self._isconnected = False
-                await asyncio.sleep(1)
+                if not self._has_connected:
+                    break
+
+                try:
+                    await self.connect()
+                except OSError as e:
+                    self.dprint('Error in reconnect. %s', e)
+                    self._close()
+                    self._in_connect = False
+                    self._isconnected = False
+                    await asyncio.sleep(1)
+
+    return WLANManagedMQTTClient(device_config.get_mqtt_as_config())
 
 # Subscription callback
 async def messages(client):
@@ -225,7 +229,7 @@ async def main(client):
         await asyncio.sleep(5)
 
 
-client = WLANManagedMQTTClient(device_config.get_mqtt_as_config()) if device_config.is_mqtt_enabled() else None
+client = create_mqtt_client() if device_config.is_mqtt_enabled() else None
 
 
 try:
