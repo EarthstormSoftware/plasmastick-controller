@@ -258,8 +258,10 @@ async def main(client):
             for coroutine in (up, down, messages, publish_state):
                 asyncio.create_task(coroutine(client))
             break
-        except OSError:
-            Log.warn(TAG,'MQTT connection failed. Will retry once WLAN is healthy.')
+        except OSError as e:
+            # CONNACK codes 4 and 5 are the broker rejecting the login.
+            hint = ' Check the MQTT user and password.' if 'code 0x4' in str(e) or 'code 0x5' in str(e) else ''
+            Log.warn(TAG, f'MQTT connection failed ({e}).{hint} Will retry once WLAN is healthy.')
             await asyncio.sleep(2)
 
     while True:
