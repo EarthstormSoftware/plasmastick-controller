@@ -47,10 +47,10 @@ if DeviceConfig.provisioning_needed():
     try:
         asyncio.run(run_provisioning())
     except KeyboardInterrupt:
+        # Drop to the REPL like the main loop does, so mpremote/deploy can take over.
         Log.info(TAG,'Provisioning cancelled.')
         provisioning.stop_ap()
-        import machine
-        machine.soft_reset()
+        raise
 
 Log.info(TAG,'Initialising onboard LED')
 pico_led = PicoLed()

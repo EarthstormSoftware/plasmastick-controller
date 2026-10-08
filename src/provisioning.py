@@ -6,6 +6,7 @@ from microdot import Microdot
 from log import Log
 from wificrypto import encrypt_password
 from deviceidentity import generate_default_device_name, sanitize_device_name
+from captivedns import CaptiveDNS
 
 TAG = "PROV"
 
@@ -25,7 +26,9 @@ class Provisioning:
         self.app = None
         self.server_task = None
         self.server_error = None
-    
+        self.dns = None
+        self.dns_task = None
+
     def config_exists(self):
         """Check if provisioning config file exists."""
         try:
@@ -67,7 +70,7 @@ class Provisioning:
         self.ap.active(True)
         # security=0 means open network (no authentication)
         self.ap.config(ssid='PlasmaStick-SETUP', security=0)
-        Log.info(TAG, f'AP active. Connect to "PlasmaStick-SETUP" and visit http://192.168.4.1')
+        Log.info(TAG, 'AP active. Join "PlasmaStick-SETUP", then open any http:// address (or http://192.168.4.1)')
 
     def _scan_networks(self):
         """Scan for available WiFi networks using STA interface."""
@@ -160,6 +163,23 @@ class Provisioning:
             'Cache-Control': 'no-store',
         }
 
+    def _ap_ip(self):
+        return self.ap.ifconfig()[0]
+
+    def _portal_response(self, request, status=200):
+        """Serve the form, or redirect to it when the request was for another host.
+
+        The captive DNS points every hostname here, so phone connectivity checks
+        (e.g. connectivitycheck.gstatic.com) arrive with a foreign Host header.
+        Redirecting them to the AP IP makes the sign-in screen show the real
+        address and keeps the form posting back to it.
+        """
+        ip = self._ap_ip()
+        host = (request.headers.get('Host', '') or '').split(':')[0]
+        if host and host != ip:
+            return '', 302, {'Location': f'http://{ip}/', 'Cache-Control': 'no-store'}
+        return self._html_response(self._get_html_form(self.available_networks), status)
+
     def _create_app(self):
         app = Microdot()
 
@@ -170,7 +190,7 @@ class Provisioning:
         @app.get('/connecttest.txt')
         @app.get('/ncsi.txt')
         async def show_form(request):
-            return self._html_response(self._get_html_form(self.available_networks))
+            return self._portal_response(request)
 
         @app.get('/scan')
         async def rescan(request):
@@ -234,11 +254,11 @@ class Provisioning:
 
         @app.get('/<path:probe_path>')
         async def probe(request, probe_path):
-            return self._html_response(self._get_html_form(self.available_networks))
+            return self._portal_response(request)
 
         @app.errorhandler(404)
         async def not_found(request):
-            return self._html_response(self._get_html_form(self.available_networks), 404)
+            return self._portal_response(request, 404)
 
         @app.errorhandler(500)
         async def internal_error(request):
@@ -269,7 +289,9 @@ class Provisioning:
         self.server_error = None
         self.app = self._create_app()
         self.server_task = asyncio.create_task(self._run_server())
-        
+        self.dns = CaptiveDNS(self._ap_ip())
+        self.dns_task = asyncio.create_task(self.dns.run())
+
         timeout = 600  # 10 minute timeout
         start_time = time.time()
         
@@ -292,6 +314,13 @@ class Provisioning:
                     self.server_error = e
                     Log.error(TAG, f'Provisioning server task error: {e}')
             self.server_task = None
+
+        if self.dns is not None:
+            self.dns.stop()
+            if self.dns_task is not None:
+                await self.dns_task
+            self.dns = None
+            self.dns_task = None
 
         if self.provisioning_complete and self.server_error is None:
             Log.info(TAG, 'Provisioning received. Restarting...')

@@ -8,8 +8,10 @@ API, MQTT, or the button on the board.
 
 - Lighting modes: a single **Colour**, **Rainbows**, and **CheerLights** (follows the global
   [CheerLights](https://cheerlights.com) colour).
-- Wi-Fi setup without editing files: on first boot the device opens a `PlasmaStick-SETUP` access point with a setup
-  page. The Wi-Fi password is stored encrypted with a key derived from the device.
+- Wi-Fi setup without editing files: on first boot the device opens a `PlasmaStick-SETUP` access point for 10
+  minutes. Join it, then open any `http://` address (for example `http://example.com`) and you're redirected to the
+  setup page at `http://192.168.4.1`. Some phones also pop up a "Sign in to network" prompt, but don't rely on it.
+  The Wi-Fi password is stored encrypted with a key derived from the device.
 - Web UI and JSON HTTP API on port 80.
 - Optional MQTT control, using [mqtt_as](https://github.com/peterhinch/micropython-mqtt).
 - Button: a short press toggles the lights on and off; a long press returns to the default mode.
