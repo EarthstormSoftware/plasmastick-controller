@@ -21,7 +21,8 @@ API, MQTT, or the button on the board.
   on the network rather than a determined attacker. Completing setup mode removes it, if it's forgotten. POSTs
   that a browser sends from another website's page are refused either way, so a malicious page can't control the
   device through your browser.
-- Optional MQTT control, using [mqtt_as](https://github.com/peterhinch/micropython-mqtt).
+- Optional MQTT control and state reporting, using [mqtt_as](https://github.com/peterhinch/micropython-mqtt), with
+  optional Home Assistant discovery (see [MQTT](#mqtt)).
 - Button: a short press toggles the lights on and off; a long press returns to the default mode. Held at power-on,
   it starts setup mode.
 
@@ -81,6 +82,23 @@ Settings live in `config.json` on the device and can be changed from the web UI.
 gitignored, so passwords won't be committed).
 
 Wi-Fi credentials and the device name are set through setup mode and stored in `provisioning.json` on the device.
+
+## MQTT
+
+With MQTT enabled (Network tab, or `mqtt` in `config.json`), the device uses these topics, where `<name>` is its device
+name:
+
+| Topic | Direction | Contents |
+|---|---|---|
+| `/home/device/<name>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}` or `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` |
+| `/home/device/<name>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
+| `/home/device/<name>/status` | from the device, retained | `online` while connected. The broker sets `offline` (the MQTT will) if the device drops off |
+
+With **Home Assistant discovery** turned on (`mqtt.ha_discovery`), the device also publishes a retained discovery
+config to `homeassistant/light/<name>/config`, so it appears in Home Assistant as a light with an RGB colour and the
+modes as effects. Home Assistant controls it through `/home/device/<name>/ha/set` and reads
+`/home/device/<name>/ha/state`, both in Home Assistant's JSON light schema. Turning discovery off removes the entity
+on the next connection.
 
 ## Project layout
 

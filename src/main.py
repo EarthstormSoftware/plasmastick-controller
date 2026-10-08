@@ -4,7 +4,7 @@ import gc
 from log import Log
 from deviceconfig import DeviceConfig
 from picoled import PicoLed
-from ledstrip import LedStrip
+from ledstrip import LedStrip, MODES
 from devicebutton import DeviceButton
 from wlan import WLAN
 from api import DeviceAPI
@@ -113,6 +113,9 @@ async def messages(client):
             Log.info(TAG,f'Topic: "{topic_text}" Message: "{msg_text}" Retained: {retained}')
 
             payload = ujson.loads(msg_text)
+            if topic_text == mqtt_topics()['ha_set']:
+                handle_ha_command(payload)
+                continue
             message_type = payload.get("MessageType")
             parameters = payload.get("Parameters") or {}
 
@@ -135,14 +138,63 @@ async def messages(client):
         except Exception as e:
             Log.warn(TAG, f'Ignoring malformed MQTT control payload: {e}')
 
+def mqtt_topics():
+    import mqttstate
+    return mqttstate.topics(device_config.mqttconfig.client_id)
+
+def handle_ha_command(payload):
+    import mqttstate
+    try:
+        actions = mqttstate.parse_ha_command(payload, MODES)
+    except ValueError as e:
+        Log.warn(TAG, f'Ignoring Home Assistant command: {e}')
+        return
+    for action in actions:
+        if action[0] == 'power':
+            if action[1]:
+                device_api.power_on()
+            else:
+                device_api.power_off()
+        elif not device_api.set_mode(action[1], action[2]):
+            Log.warn(TAG, 'Ignoring Home Assistant command with an invalid mode or colour')
+
 # If you connect with clean_session True, must re-subscribe (MQTT spec 3.1.2.4)
 async def up(client):
+    import mqttstate
+    t = mqtt_topics()
+    ha = device_config.mqttconfig.ha_discovery
     while True:
         await client.up.wait()  # Wait on an Event
         client.up.clear()
-        await client.subscribe(device_config.get_control_topic(), 1)    
-        Log.info(TAG,'Subscribed to Control Topic')        
-        
+        await client.subscribe(device_config.get_control_topic(), 1)
+        Log.info(TAG,'Subscribed to Control Topic')
+        if ha:
+            await client.subscribe(t['ha_set'], 1)
+        await client.publish(t['status'], mqttstate.ONLINE, retain=True)
+        # With discovery off, an empty retained config removes any earlier one.
+        discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, MODES) if ha else ''
+        await client.publish(t['ha_config'], discovery, retain=True)
+        led_strip.changed.set()  # publish the current state now that we're connected
+
+async def publish_state(client):
+    # Publishes the strip's state (retained) whenever it changes. Changes while
+    # disconnected are covered by up() republishing on reconnect.
+    import mqttstate
+    t = mqtt_topics()
+    ha = device_config.mqttconfig.ha_discovery
+    while True:
+        await led_strip.changed.wait()
+        led_strip.changed.clear()
+        if not client.isconnected():
+            continue
+        report = led_strip.report()
+        try:
+            await client.publish(t['state'], mqttstate.state_payload(report), retain=True)
+            if ha:
+                await client.publish(t['ha_state'], mqttstate.ha_state_payload(report), retain=True)
+        except OSError as e:
+            Log.warn(TAG, f'Failed to publish state: {e}')
+
 async def down(client):
     while True:
         await client.down.wait()  # Pause until connectivity changes
@@ -203,7 +255,7 @@ async def main(client):
         try:
             await client.connect()
             Log.info(TAG,'Creating MQTT tasks')
-            for coroutine in (up, down, messages):
+            for coroutine in (up, down, messages, publish_state):
                 asyncio.create_task(coroutine(client))
             break
         except OSError:

@@ -123,6 +123,7 @@ class DeviceAPI:
                 'user': dc.mqttconfig.user,
                 'clean': dc.mqttconfig.clean,
                 'queue_len': dc.mqttconfig.queue_len,
+                'ha_discovery': dc.mqttconfig.ha_discovery,
             },
             'web': {
                 'password_set': bool(self.web_password),
@@ -209,6 +210,8 @@ class DeviceAPI:
                 cfg['mqtt']['password'] = pw
             if 'clean' in mqtt:
                 cfg['mqtt']['clean'] = bool(mqtt['clean'])
+            if 'ha_discovery' in mqtt:
+                cfg['mqtt']['ha_discovery'] = bool(mqtt['ha_discovery'])
             if 'queue_len' in mqtt:
                 v = int(mqtt['queue_len'])
                 if v < 1:

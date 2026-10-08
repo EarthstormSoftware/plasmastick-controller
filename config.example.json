@@ -22,7 +22,8 @@
         "user": "",
         "password": "",
         "clean": true,
-        "queue_len": 1
+        "queue_len": 1,
+        "ha_discovery": false
     },
     "web": {
         "password": ""

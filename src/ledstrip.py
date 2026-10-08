@@ -65,6 +65,12 @@ class LedStrip:
         # CheerLights async task tracking
         self._cheerlights_task = None
 
+        # The colour actually showing ('#rrggbb'), for state reports. None in
+        # Rainbows mode, or before CheerLights has fetched one.
+        self.current_colour = None
+        # Set whenever what's showing changes, so state can be published.
+        self.changed = asyncio.Event()
+
         # Set whenever a new state, mode or mode parameters are requested, so the
         # controller applies and repaints once instead of every loop.
         self._dirty = True
@@ -124,7 +130,12 @@ class LedStrip:
             self._cached_hex_colour = hex_colour
         return self._cached_rgb
 
+    def report(self):
+        """What the strip is showing: {'state', 'mode', 'colour'}."""
+        return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour}
+
     def set_colour(self, colour):
+        self.current_colour = colour
         
         r, g, b = self.hex_to_rgb(colour)
 
@@ -148,6 +159,9 @@ class LedStrip:
             for i in range(self.device_config.device_led_count):
                 self.led_strip.set_rgb(i, r, g, b)
             Log.info(TAG, 'LEDs set to {}'.format(hex_colour))
+            if hex_colour != self.current_colour:
+                self.current_colour = hex_colour
+                self.changed.set()
         except Exception as e:
             Log.warn(TAG, 'CheerLights update failed: {!r}'.format(e))
 
@@ -168,6 +182,13 @@ class LedStrip:
                         self.set_mode(self.next_mode)                            
 
                     Log.debug(TAG, 'State / Mode change, so reinitialise')
+                    if self.current_mode == 'Colour':
+                        parms = self.mode_parameters if isinstance(self.mode_parameters, dict) else {}
+                        self.current_colour = parms.get('Colour', '#ffffff')
+                    elif self.current_mode == 'Rainbows':
+                        self.current_colour = None
+                    # CheerLights keeps the last fetched colour until a new one arrives.
+                    self.changed.set()
                     self.cheerlights_last_update = 0
                     self.rainbows_speed = 5
                     self.rainbows_update = 60

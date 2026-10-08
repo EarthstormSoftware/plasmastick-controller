@@ -230,6 +230,14 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
         </select>
       </div>
     </div>
+    <div class="frow">
+      <div class="field"><label>Home Assistant Discovery</label>
+        <select name="ha_discovery" id="ha_discovery">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+    </div>
     <div class="sec">Web Access</div>
     <div class="frow">
       <div class="field"><label>Password (<span id="web_password_state">none set</span>)</label>
@@ -290,6 +298,7 @@ Promise.all([fetch('/api/info'), fetch('/api/config')])
     el('mqtt_user').value = mq.user;
     el('queue_len').value = mq.queue_len;
     sel('clean', !!mq.clean);
+    sel('ha_discovery', !!mq.ha_discovery);
     el('web_password_state').textContent = d[1].web && d[1].web.password_set ? 'set' : 'none set';
     document.querySelectorAll('.save').forEach(function (b) { b.disabled = false; });
   })

@@ -214,6 +214,7 @@ class HTTPServer:
                         'user': form.get('mqtt_user', ''),
                         'queue_len': int(form.get('queue_len', 4)),
                         'clean': form.get('clean', 'true') == 'true',
+                        'ha_discovery': form.get('ha_discovery', 'false') == 'true',
                     }
                     pw = form.get('mqtt_password', '')
                     if pw:

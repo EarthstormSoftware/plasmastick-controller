@@ -33,6 +33,8 @@ _DEFAULT_CONFIG = {
         "password": "",
         "clean": True,
         "queue_len": 1,
+        # Announce the device to Home Assistant over MQTT discovery.
+        "ha_discovery": False,
     },
     "web": {
         # Empty: the web UI and API are open to anyone on the network.
@@ -245,6 +247,7 @@ class MQTTConfig:
         self.password = mqttconfig.get("password", "")
         self.clean = mqttconfig.get("clean", True)
         self.queue_len = mqttconfig.get("queue_len", 1)
+        self.ha_discovery = bool(mqttconfig.get("ha_discovery", False))
 
     def is_enabled(self):
         return bool(self.enabled) and bool(self.broker_address)
@@ -258,5 +261,8 @@ class MQTTConfig:
         cfg["password"] = self.password
         cfg["clean"] = self.clean
         cfg["queue_len"] = self.queue_len
+        # The broker publishes this if the device drops off without saying goodbye.
+        from mqttstate import topics, OFFLINE
+        cfg["will"] = (topics(self.client_id)['status'], OFFLINE, True, 0)
         return cfg
 
