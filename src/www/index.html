@@ -230,6 +230,19 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
         </select>
       </div>
     </div>
+    <div class="sec">Web Access</div>
+    <div class="frow">
+      <div class="field"><label>Password (<span id="web_password_state">none set</span>)</label>
+        <input type="password" name="web_password" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
+      </div>
+      <div class="field"><label>Remove Password</label>
+        <select name="web_password_clear">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#888">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
     <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
   </form>
 </div>
@@ -277,6 +290,7 @@ Promise.all([fetch('/api/info'), fetch('/api/config')])
     el('mqtt_user').value = mq.user;
     el('queue_len').value = mq.queue_len;
     sel('clean', !!mq.clean);
+    el('web_password_state').textContent = d[1].web && d[1].web.password_set ? 'set' : 'none set';
     document.querySelectorAll('.save').forEach(function (b) { b.disabled = false; });
   })
   .catch(function (e) {

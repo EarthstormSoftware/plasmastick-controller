@@ -34,6 +34,10 @@ _DEFAULT_CONFIG = {
         "clean": True,
         "queue_len": 1,
     },
+    "web": {
+        # Empty: the web UI and API are open to anyone on the network.
+        "password": "",
+    },
 }
 
 
@@ -68,7 +72,7 @@ def _merge_with_defaults(configdata):
         if section not in merged:
             merged[section] = values
     if missing:
-        Log.warn(TAG, f'config.json has no {", ".join(missing)}; using defaults')
+        Log.info(TAG, f'config.json has no {", ".join(missing)}; using defaults')
     return merged
 
 
@@ -119,6 +123,7 @@ class DeviceConfig:
 
         self.wlanconfig = WlanConfig(configdata["wlan"])
         self.mqttconfig = MQTTConfig(self.device_name, configdata["mqtt"])
+        self.web_password = configdata["web"]["password"]
         Log.info(TAG, f'Using device name: {self.device_name}')
         
     def get_wlanconfig(self):
@@ -187,6 +192,20 @@ class DeviceConfig:
 
         return DeviceConfig(_merge_with_defaults(configdata))
     
+    @staticmethod
+    def clear_web_password():
+        """Remove the web password from config.json. Setup mode does this, so
+        a forgotten password can be recovered with physical access."""
+        try:
+            with open("config.json") as fp:
+                configdata = ujson.load(fp)
+            if configdata.get("web", {}).get("password"):
+                configdata["web"]["password"] = ""
+                DeviceConfig.saveConfigToFile(configdata)
+                Log.info(TAG, 'Web password cleared')
+        except (OSError, ValueError, AttributeError) as e:
+            Log.warn(TAG, f'Could not clear the web password: {e}')
+
     @staticmethod
     def saveConfigToFile(configdata):
         Log.info(TAG,'Saving configuration to file')

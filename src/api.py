@@ -26,6 +26,8 @@ class DeviceAPI:
         # defaults), so they also fill in any keys an older file was missing.
         # A copy, so changes here don't alter the live settings in device_config.
         self._config_cache = ujson.loads(ujson.dumps(device_config.configdata))
+        # Checked on every HTTP request; updated as soon as a new one is saved.
+        self.web_password = device_config.web_password
     
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
@@ -122,6 +124,9 @@ class DeviceAPI:
                 'clean': dc.mqttconfig.clean,
                 'queue_len': dc.mqttconfig.queue_len,
             },
+            'web': {
+                'password_set': bool(self.web_password),
+            },
         }
 
     def save_config(self, updates):
@@ -210,8 +215,19 @@ class DeviceAPI:
                     return False, 'queue_len must be >= 1'
                 cfg['mqtt']['queue_len'] = v
 
+            # Web section: set a new password, or clear it.
+            web_updates = updates.get('web', {})
+            if web_updates.get('clear_password'):
+                cfg.setdefault('web', {})['password'] = ''
+            elif 'password' in web_updates:
+                pw = str(web_updates['password'])
+                if len(pw) < 4:
+                    return False, 'Web password must be at least 4 characters'
+                cfg.setdefault('web', {})['password'] = pw
+
             DeviceConfig.saveConfigToFile(cfg)
             self._config_cache = cfg
+            self.web_password = cfg.get('web', {}).get('password', '')
             Log.info(TAG, 'Config saved.')
             return True, None
 

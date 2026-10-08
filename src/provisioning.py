@@ -8,7 +8,7 @@ from microdot import Microdot
 from log import Log
 from wificrypto import encrypt_password
 from deviceidentity import generate_default_device_name, sanitize_device_name
-from deviceconfig import DEVICE_NAME_FILE
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
 from htmlutil import escape
 from captivedns import CaptiveDNS
 
@@ -63,6 +63,8 @@ class Provisioning:
         try:
             with open(self.provisioning_file, 'w') as f:
                 ujson.dump(config, f)
+            # Completing setup also removes a forgotten web password.
+            DeviceConfig.clear_web_password()
             # A name saved earlier from the web UI would take priority over the
             # one just entered here, so drop it.
             try:

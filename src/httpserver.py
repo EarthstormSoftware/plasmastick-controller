@@ -1,4 +1,5 @@
 import uasyncio as asyncio
+import ubinascii
 from microdot import Microdot, Response
 from log import Log
 from htmlutil import escape
@@ -9,6 +10,28 @@ TAG = "HTTP"
 # /api/config. It is streamed from flash in small chunks, so serving it
 # never needs one large block of heap.
 INDEX_FILE = '/www/index.html'
+
+
+def origin_allowed(headers):
+    """False for a POST a browser sent from another site's page (a form or
+    script elsewhere targeting this device). Browsers send Origin on such
+    requests; scripts like curl send none and are allowed."""
+    origin = headers.get('Origin')
+    if not origin:
+        return True
+    return origin.split('://', 1)[-1].rstrip('/') == headers.get('Host', '')
+
+
+def password_ok(headers, password):
+    """True if HTTP Basic auth in headers carries password (any username)."""
+    auth = headers.get('Authorization', '')
+    if not auth.startswith('Basic '):
+        return False
+    try:
+        decoded = ubinascii.a2b_base64(auth[6:].strip()).decode('utf-8')
+    except (ValueError, UnicodeError):
+        return False
+    return decoded.partition(':')[2] == password
 
 class HTTPServer:
     """Microdot-based async HTTP server for API and WebUI."""
@@ -29,6 +52,17 @@ class HTTPServer:
         def _is_form(req):
             ct = req.content_type or ''
             return 'application/x-www-form-urlencoded' in ct
+
+        @app.before_request
+        async def guard(request):
+            if request.method == 'POST' and not origin_allowed(request.headers):
+                Log.warn(TAG, f'Refused cross-site POST {request.path} from {request.headers.get("Origin")}')
+                return 'Cross-site request refused', 403, {'Content-Type': 'text/plain; charset=utf-8'}
+            if api.web_password and not password_ok(request.headers, api.web_password):
+                return 'Password required', 401, {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'WWW-Authenticate': 'Basic realm="PlasmaStick", charset="UTF-8"',
+                }
 
         @app.get('/')
         @app.get('/ui')
@@ -184,6 +218,10 @@ class HTTPServer:
                     pw = form.get('mqtt_password', '')
                     if pw:
                         updates['mqtt']['password'] = pw
+                    if form.get('web_password_clear') == 'true':
+                        updates['web'] = {'clear_password': True}
+                    elif form.get('web_password'):
+                        updates['web'] = {'password': form.get('web_password')}
                 success, error = api.save_config(updates)
                 if success:
                     asyncio.create_task(http_server._restart_soon())

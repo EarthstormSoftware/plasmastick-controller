@@ -23,5 +23,8 @@
         "password": "",
         "clean": true,
         "queue_len": 1
+    },
+    "web": {
+        "password": ""
     }
 }

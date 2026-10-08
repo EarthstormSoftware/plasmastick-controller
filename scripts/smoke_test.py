@@ -19,6 +19,7 @@ import os
 import socket
 import sys
 import time
+import base64
 import urllib.error
 import urllib.request
 
@@ -33,16 +34,22 @@ def report(status, name, detail=''):
 
 
 class Device:
-    def __init__(self, host, timeout):
+    def __init__(self, host, timeout, password=None):
         self.base = f'http://{host}'
         self.timeout = timeout
+        self.password = password
 
-    def request(self, method, path, body=None):
+    def request(self, method, path, body=None, headers=None):
         """Return (status, parsed JSON or text, headers, seconds)."""
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method)
         if data is not None:
             req.add_header('Content-Type', 'application/json')
+        if self.password:
+            token = base64.b64encode(f'smoke-test:{self.password}'.encode()).decode()
+            req.add_header('Authorization', f'Basic {token}')
+        for name, value in (headers or {}).items():
+            req.add_header(name, value)
         start = time.monotonic()
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
@@ -81,7 +88,9 @@ def check(name, ok, detail=''):
 
 def contains_key(obj, needle):
     if isinstance(obj, dict):
-        return any(needle in k.lower() or contains_key(v, needle) for k, v in obj.items())
+        # web.password_set only says whether one is set, so it doesn't count.
+        return any((needle in k.lower() and not k.lower().endswith('_set')) or contains_key(v, needle)
+                   for k, v in obj.items())
     if isinstance(obj, list):
         return any(contains_key(v, needle) for v in obj)
     return False
@@ -102,6 +111,17 @@ def test_http(dev):
 
     status, _, _, _ = dev.request('GET', '/no-such-page')
     check('http.not_found', status == 404, f'{status}')
+
+    before = dev.info().get('state')
+    status, _, _, _ = dev.request('POST', '/api/power/toggle', {}, headers={'Origin': 'http://evil.example'})
+    check('http.cross_site_refused', status == 403 and dev.info().get('state') == before, f'{status}')
+
+    password_set = isinstance(config, dict) and config.get('web', {}).get('password_set')
+    if password_set:
+        status, _, headers, _ = Device(dev.base[len('http://'):], dev.timeout).request('GET', '/api/info')
+        check('http.password_required', status == 401 and 'Basic' in headers.get('WWW-Authenticate', ''), f'{status}')
+    else:
+        report('SKIP', 'http.password_required', 'no web password set on the device')
 
     for action, expected in (('off', False), ('on', True), ('toggle', False), ('toggle', True)):
         status, _, _, _ = dev.request('POST', f'/api/power/{action}', {})
@@ -227,6 +247,8 @@ def main():
     parser.add_argument('--broker', help="Override the broker address from the device's config")
     parser.add_argument('--mqtt-port', type=int, default=1883)
     parser.add_argument('--mqtt-password', help='MQTT password (default: local config.json or PLASMASTICK_MQTT_PASSWORD)')
+    parser.add_argument('--password', default=os.environ.get('PLASMASTICK_WEB_PASSWORD'),
+                        help='Web password, if one is set (default: PLASMASTICK_WEB_PASSWORD)')
     parser.add_argument('--soak', type=float, default=0, help='Poll /api/info for this many seconds afterwards')
     parser.add_argument('--max-latency', type=float, default=2.0, help='Soak latency limit in seconds (default 2)')
     args = parser.parse_args()
@@ -238,7 +260,7 @@ def main():
         return 2
     report('PASS', 'resolve', f'{args.host} -> {ip}')
 
-    dev = Device(args.host, args.timeout)
+    dev = Device(args.host, args.timeout, args.password)
     try:
         original = dev.info()
     except (OSError, RuntimeError) as e:
