@@ -30,6 +30,7 @@ MILESTONES = [
     ('mqtt', r'\[MAIN\] :: Subscribed to Control Topic'),
     ('mqtt_disabled', r'\[MAIN\] :: MQTT is disabled'),
     ('provisioning', r'\[MAIN\] :: WiFi provisioning required'),
+    ('setup_ap', r'\[PROV\] :: Provisioning server running'),
 ]
 
 PROBLEMS = [
@@ -56,7 +57,7 @@ def soft_reset(ser):
 
 
 def is_ready(found):
-    if 'provisioning' in found:
+    if 'setup_ap' in found:
         return True
     return 'http' in found and ('mqtt' in found or 'mqtt_disabled' in found)
 

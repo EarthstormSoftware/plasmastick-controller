@@ -48,6 +48,7 @@ everything arrived, and soft-resets the board.
 | `-Port COM4` | Use a specific serial port instead of auto-detecting |
 | `-ResetConfig` | Overwrite the device's `config.json` (it is otherwise only copied when the device has none) |
 | `-PreserveProvisioning:$false` | Wipe the stored Wi-Fi credentials and device name, so the device starts setup mode again |
+| `-Wipe` | Delete everything on the device first, then deploy with `config.example.json` (or a local `config.json`). It boots into setup mode |
 | `-SkipReset` | Don't reset the board after copying |
 
 ## Configuration

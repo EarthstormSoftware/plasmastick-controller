@@ -1,6 +1,7 @@
 param(
     [switch]$PreserveProvisioning = $true,
     [switch]$ResetConfig,
+    [switch]$Wipe,
     [switch]$SkipReset,
     [string]$Port
 )
@@ -133,6 +134,29 @@ function Remove-RemoteDirIfExists {
     }
 }
 
+function Clear-DeviceFilesystem {
+    # Delete every file and directory on the device, so the deploy starts from a
+    # blank filesystem (no config, provisioning or device name).
+    $wipeScript = Join-Path $buildDir 'wipe_device.py'
+    Set-Content -Path $wipeScript -Encoding ascii -Value @(
+        'import os',
+        'def rm(d):',
+        '    for e in os.ilistdir(d):',
+        "        p = d.rstrip('/') + '/' + e[0]",
+        '        if e[1] == 0x4000:',
+        '            rm(p)',
+        '            os.rmdir(p)',
+        '        else:',
+        '            os.remove(p)',
+        "rm('/')",
+        "print('WIPED', len(os.listdir('/')))"
+    )
+    $output = Invoke-MpRemote -Args @('run', $wipeScript)
+    if (-not ($output | Where-Object { "$_" -match '^WIPED 0$' })) {
+        throw "Device wipe did not leave an empty filesystem:`n$output"
+    }
+}
+
 function Assert-DeviceReachable {
     param([int]$Attempts = 3)
 
@@ -221,6 +245,12 @@ else {
 Write-Host 'Checking connected device...'
 Assert-DeviceReachable
 
+if ($Wipe) {
+    Write-Host 'Wiping the device filesystem...'
+    Clear-DeviceFilesystem
+    $ResetConfig = $true
+}
+
 Write-Host 'Cleaning old deployed files from device...'
 foreach ($remoteFile in $remoteFilesToRemove) {
     Remove-RemoteFileIfExists -RemotePath $remoteFile
@@ -271,6 +301,6 @@ $summaryPort = if ($SelectedPort) { $SelectedPort } else { 'auto' }
 Write-Host 'Deploy complete.'
 Write-Host "Summary: port=$summaryPort, files=$($runtimePythonFiles.Count), config=$configDeployed, verified=$($requiredRemoteFiles.Count), reset=$($SkipReset -eq $false), duration=${durationSeconds}s"
 Write-Host "DEPLOY_SUCCESS $($deployEnd.ToString('s'))"
-if ($PreserveProvisioning) {
+if ($PreserveProvisioning -and -not $Wipe) {
     Write-Host 'Provisioning files were preserved. Use -PreserveProvisioning:$false to wipe provisioning/device name.'
 }
