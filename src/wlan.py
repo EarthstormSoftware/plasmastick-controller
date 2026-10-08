@@ -42,6 +42,7 @@ class WLAN:
         self.was_connected = False
         # Whether Wi-Fi has connected at all since boot
         self.ever_connected = False
+        self.scanned = False
         self.retry_count = 0
 
         # Time when the last connect attempt started
@@ -70,8 +71,11 @@ class WLAN:
         
         self.wlan.active(True)
 
-        # Only scan for Wi-Fi networks on first attempt to save time on reconnects
-        if self.retry_count == 0:
+        # Scan (for the log) only on the first attempt after boot, which runs
+        # before the event loop starts. scan() blocks for a second or two, and
+        # reconnects run inside the controller loop.
+        if not self.scanned:
+            self.scanned = True
             networks = self.wlan.scan()
             Log.info(TAG, 'Available WiFi Networks:')
             for network_info in networks:
