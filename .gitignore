@@ -9,6 +9,7 @@ build/
 # Python
 .venv*/
 __pycache__/
+.pytest_cache/
 *.pyc
 
 # Editor stubs (installed with pip --target typings, see README; not committed)

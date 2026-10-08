@@ -1,0 +1,105 @@
+"""Host-side tests for the device code's pure logic (run with: py -m pytest).
+
+MicroPython-only modules are replaced with small stand-ins before any device
+module is imported, and src/ and src/lib/ go on sys.path like on the device.
+These tests cover parsing, validation and HTML/DNS building; anything that
+touches hardware or the network is still checked on the device.
+"""
+import asyncio
+import binascii
+import hashlib
+import json
+import os
+import sys
+import time
+import types
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:0] = [os.path.join(ROOT, 'src'), os.path.join(ROOT, 'src', 'lib')]
+
+
+def _module(name, **attrs):
+    module = types.ModuleType(name)
+    module.__dict__.update(attrs)
+    sys.modules[name] = module
+    return module
+
+
+# MicroPython's u-prefixed aliases.
+uasyncio = _module('uasyncio', **{k: v for k, v in vars(asyncio).items() if not k.startswith('__')})
+uasyncio.sleep_ms = lambda ms: asyncio.sleep(ms / 1000)
+sys.modules['ujson'] = json
+sys.modules['ubinascii'] = binascii
+sys.modules['uhashlib'] = hashlib
+
+# MicroPython's extra time functions.
+time.ticks_ms = lambda: int(time.monotonic() * 1000)
+time.ticks_diff = lambda a, b: a - b
+time.sleep_ms = lambda ms: time.sleep(ms / 1000)
+
+
+class _Pin:
+    IN, OUT, PULL_UP = 0, 1, 2
+
+    def __init__(self, *args, **kwargs):
+        self._value = 1  # pull-up: not pressed
+
+    def value(self, v=None):
+        if v is None:
+            return self._value
+        self._value = v
+
+
+def _reset():
+    raise SystemExit('machine.reset() called')
+
+
+_module('machine', Pin=_Pin, unique_id=lambda: bytes.fromhex('0123456789a1b2c3'),
+        reset=_reset, soft_reset=_reset)
+
+
+class _WLAN:
+    def __init__(self, interface=0):
+        self._active = False
+
+    def active(self, value=None):
+        if value is None:
+            return self._active
+        self._active = value
+
+    def config(self, *args, **kwargs):
+        return b'\x28\xcd\xc1\x00\x00\x01' if args == ('mac',) else None
+
+    def ifconfig(self):
+        return ('192.168.4.1', '255.255.255.0', '192.168.4.1', '192.168.4.1')
+
+    def scan(self):
+        return []
+
+    def isconnected(self):
+        return False
+
+
+_module('network', WLAN=_WLAN, STA_IF=0, AP_IF=1, STAT_CONNECTING=1, STAT_GOT_IP=3,
+        hostname=lambda name=None: name or 'PicoLights-TEST')
+
+
+class _Strip:
+    def __init__(self, count, **kwargs):
+        self.pixels = [None] * count
+
+    def start(self):
+        pass
+
+    def clear(self):
+        self.pixels = [None] * len(self.pixels)
+
+    def set_rgb(self, i, r, g, b):
+        self.pixels[i] = (r, g, b)
+
+    def set_hsv(self, i, h, s, v):
+        self.pixels[i] = ('hsv', h, s, v)
+
+
+_module('plasma', WS2812=_Strip, COLOR_ORDER_RGB=0, COLOR_ORDER_GRB=1)
+_module('ucryptolib', aes=None)  # wificrypto isn't exercised on the host

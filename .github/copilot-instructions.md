@@ -19,7 +19,7 @@
 - Configuration source of truth is `config.json` on the device, loaded through `deviceconfig.py`. The repo only holds `config.example.json`; a local `config.json` is gitignored.
 
 ## Build And Test
-- There is no local build system or pytest suite in this repository; verification is primarily runtime smoke testing on device.
+- There is no local build system. `tests/` has host-side pytest tests for pure logic (`py -m pytest`; `tests/conftest.py` stubs `machine`, `network`, `plasma` and the u-modules). Add tests there for new parsing/validation logic. Hardware and network behaviour is still verified by smoke testing on device.
 - Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles everything except `main.py`, including `src/lib/`, to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed.
 - `tools/diagnostics/` holds on-device diagnostic scripts (run with `mpremote run`), not automated tests.
 - For mqtt_as upgrades and rollback/testing commands, follow `docs/mqtt_as_maintenance.md`.

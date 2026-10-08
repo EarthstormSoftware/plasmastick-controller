@@ -5,3 +5,4 @@ mpy-cross  # keep its major.minor in line with the device firmware (bytecode for
 # Editor stubs go in typings/ instead (see README): py -m pip install --target typings micropython-rp2-rpi_pico_w-stubs
 pyserial  # scripts/device_log.py (also installed by mpremote)
 paho-mqtt>=2.0  # scripts/smoke_test.py
+pytest>=8  # tests/ (py -m pytest)

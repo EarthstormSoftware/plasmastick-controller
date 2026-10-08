@@ -57,6 +57,19 @@ copies it to the device (libraries into `/lib`), checks that everything arrived,
 | `-Wipe` | Delete everything on the device first, then deploy with `config.example.json` (or a local `config.json`). It boots into setup mode |
 | `-SkipReset` | Don't reset the board after copying |
 
+## Tests
+
+`tests/` holds host-side tests for the device code's logic (config loading and saving, the captive-portal DNS
+replies, HTML escaping, the CheerLights HTTP client). They run on this PC with stand-ins for the MicroPython-only
+modules, so they don't need the device:
+
+```powershell
+py -m pytest
+```
+
+Anything that touches hardware or the network still needs the device: `scripts/smoke_test.py` checks a running board
+over HTTP and MQTT.
+
 ## Configuration
 
 Settings live in `config.json` on the device and can be changed from the web UI. The first deploy copies
@@ -72,6 +85,7 @@ Wi-Fi credentials and the device name are set through setup mode and stored in `
 | `src/` | Device code, deployed to the root of the device. `main.py` is the entry point |
 | `src/www/` | The web UI, deployed to `/www`: a static page that fills itself in from the JSON API |
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
+| `tests/` | Host-side pytest tests (`py -m pytest`); `conftest.py` stands in for the MicroPython-only modules |
 | `scripts/` | `deploy.ps1`; `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
 | `tools/diagnostics/` | Scripts for checking the HTTP server on a device (`mpremote run tools/diagnostics/<script>.py`) |
 | `docs/` | Maintenance notes |
