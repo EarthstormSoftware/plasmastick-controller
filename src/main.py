@@ -34,33 +34,8 @@ if not setup_reason and DeviceButton.held_at_boot():
 
 if setup_reason:
     Log.warn(TAG, f'WiFi provisioning required ({setup_reason}). Starting AP mode.')
-    from provisioning import Provisioning
-    provisioning = Provisioning(device_config.device_name)
-
-    async def run_provisioning():
-        pico_led = PicoLed()
-        asyncio.create_task(pico_led.controller())
-        pico_led.set_state(True, True, 500)  # Flash LED to indicate AP mode
-
-        while True:
-            if await provisioning.run_provisioning_loop():
-                Log.info(TAG,'Provisioning complete. Restarting...')
-                import machine
-                machine.soft_reset()
-            # The SSID comes from provisioning.json, or from config.json on older setups.
-            if device_config.wlanconfig.ssid:
-                Log.warn(TAG,'Setup mode timed out. Carrying on with the saved Wi-Fi settings.')
-                break
-            Log.warn(TAG,'Setup mode timed out with no Wi-Fi settings saved. Starting it again.')
-        pico_led.set_state(False, False)
-
-    try:
-        asyncio.run(run_provisioning())
-    except KeyboardInterrupt:
-        # Drop to the REPL like the main loop does, so mpremote/deploy can take over.
-        Log.info(TAG,'Provisioning cancelled.')
-        provisioning.stop_ap()
-        raise
+    from provisioning import run_setup_mode
+    run_setup_mode(device_config, PicoLed())  # ends with a hard reset
 
 Log.info(TAG,'Initialising onboard LED')
 pico_led = PicoLed()

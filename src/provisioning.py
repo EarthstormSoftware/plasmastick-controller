@@ -1,3 +1,4 @@
+import machine
 import network
 import os
 import ujson
@@ -12,6 +13,8 @@ from htmlutil import escape
 from captivedns import CaptiveDNS
 
 TAG = "PROV"
+
+SETUP_TIMEOUT_S = 600
 
 class Provisioning:
     """
@@ -292,7 +295,7 @@ class Provisioning:
             self.server_error = e
             Log.error(TAG, f'Provisioning server failed: {e}')
     
-    async def run_provisioning_loop(self):
+    async def run_provisioning_loop(self, timeout=SETUP_TIMEOUT_S):
         """
         Run provisioning server loop (Microdot-based).
         Returns True if provisioning was completed, False if timed out.
@@ -305,7 +308,6 @@ class Provisioning:
         self.dns = CaptiveDNS(self._ap_ip())
         self.dns_task = asyncio.create_task(self.dns.run())
 
-        timeout = 600  # 10 minute timeout
         start_time = time.time()
         
         Log.info(TAG, f'Provisioning server running with Microdot (timeout in {timeout}s)')
@@ -346,3 +348,35 @@ class Provisioning:
             Log.warn(TAG, 'Provisioning timeout.')
         self.stop_ap()
         return False
+
+
+def run_setup_mode(device_config, pico_led, timeout=SETUP_TIMEOUT_S):
+    """Run setup mode until new Wi-Fi settings are saved, or until it times out
+    and there are saved settings to carry on with. Either way it ends with a
+    hard reset: after the access point has run, a soft reset leaves the Wi-Fi
+    chip with no route to the internet (local addresses still work), which
+    only a hard reset or power cycle clears. Ctrl-C drops to the REPL."""
+    provisioning = Provisioning(device_config.device_name)
+
+    async def run():
+        asyncio.create_task(pico_led.controller())
+        pico_led.set_state(True, True, 500)  # Flash LED to indicate AP mode
+        while True:
+            if await provisioning.run_provisioning_loop(timeout):
+                Log.info(TAG, 'Provisioning complete. Restarting...')
+                break
+            # The SSID comes from provisioning.json, or from config.json on older setups.
+            if device_config.wlanconfig.ssid:
+                Log.warn(TAG, 'Setup mode ended without new settings. Restarting with the saved Wi-Fi settings.')
+                break
+            Log.warn(TAG, 'Setup mode ended with no Wi-Fi settings saved. Starting it again.')
+        await asyncio.sleep(1)  # let the last response and log lines go out
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        # Drop to the REPL like the main loop does, so mpremote/deploy can take over.
+        Log.info(TAG, 'Provisioning cancelled.')
+        provisioning.stop_ap()
+        raise
+    machine.reset()
