@@ -3,3 +3,5 @@
 mpremote
 mpy-cross  # keep its major.minor in line with the device firmware (bytecode format must match)
 micropython-rp2-rpi_pico_w-stubs
+pyserial  # scripts/device_log.py (also installed by mpremote)
+paho-mqtt>=2.0  # scripts/smoke_test.py

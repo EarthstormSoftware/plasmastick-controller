@@ -1,0 +1,12 @@
+{
+  "name": "micropico-bridge",
+  "displayName": "MicroPico Bridge",
+  "description": "Lets scripts disconnect and reconnect the MicroPico vREPL through vscode://earthstorm.micropico-bridge/disconnect and /connect, so tools like mpremote can use the serial port.",
+  "version": "0.1.0",
+  "publisher": "earthstorm",
+  "license": "MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onUri"],
+  "extensionDependencies": ["paulober.pico-w-go"]
+}

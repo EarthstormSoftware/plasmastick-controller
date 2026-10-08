@@ -58,8 +58,9 @@ Wi-Fi credentials and the device name are set through setup mode and stored in `
 |---|---|
 | `src/` | Device code, deployed to the root of the device. `main.py` is the entry point |
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
-| `scripts/` | `deploy.ps1` |
+| `scripts/` | `deploy.ps1`; `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
 | `tools/diagnostics/` | Scripts for checking the HTTP server on a device (`mpremote run tools/diagnostics/<script>.py`) |
+| `tools/vscode-micropico-bridge/` | Optional VS Code extension that lets the scripts disconnect and reconnect the MicroPico vREPL, so the serial port is free. Build with `py tools/vscode-micropico-bridge/build_vsix.py`, then `code --install-extension build/micropico-bridge.vsix` |
 | `docs/` | Maintenance notes |
 
 ## Known Restrictions

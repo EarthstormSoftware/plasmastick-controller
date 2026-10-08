@@ -19,16 +19,18 @@ $deployStart = Get-Date
 $MpremoteCommand = $null
 $SelectedPort = $null
 
-function Invoke-VSCodeCommandBestEffort {
-    param([string]$CommandId)
+# VS Code has no command-line way to run an extension's commands, so the MicroPico
+# vREPL is driven through the MicroPico Bridge extension's URI handler
+# (tools/vscode-micropico-bridge). Without that extension these do nothing.
+function Invoke-MicroPicoBridge {
+    param([string]$Action)
 
-    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
-    if (-not $codeCmd) {
+    if (-not (Get-Command code -ErrorAction SilentlyContinue)) {
         return $false
     }
 
     try {
-        & code --command $CommandId 2>$null | Out-Null
+        & code --open-url "vscode://earthstorm.micropico-bridge/$Action" 2>$null | Out-Null
         return $true
     }
     catch {
@@ -36,33 +38,28 @@ function Invoke-VSCodeCommandBestEffort {
     }
 }
 
+$script:ReplDisconnected = $false
+
 function Disconnect-MicroPicoReplBestEffort {
     if (-not $DisconnectRepl) {
         return
     }
 
-    Write-Host 'Attempting to disconnect MicroPico vREPL (best-effort)...'
-    $attempted = $false
-    foreach ($cmd in @('micropico.disconnect', 'microPico.disconnect')) {
-        $attempted = $attempted -or (Invoke-VSCodeCommandBestEffort -CommandId $cmd)
-    }
-
-    if (-not $attempted) {
-        Write-Host 'Could not auto-disconnect via VS Code command. Continuing with mpremote retries.'
+    Write-Host 'Asking MicroPico to disconnect its vREPL (needs the MicroPico Bridge extension)...'
+    $script:ReplDisconnected = Invoke-MicroPicoBridge -Action 'disconnect'
+    if (-not $script:ReplDisconnected) {
+        Write-Host 'Could not reach VS Code. Continuing with mpremote retries.'
     }
 }
 
 function Reconnect-MicroPicoReplBestEffort {
-    if (-not $ReconnectRepl) {
+    # Only reconnect if this script disconnected it.
+    if (-not $ReconnectRepl -or -not $script:ReplDisconnected) {
         return
     }
 
-    Write-Host 'Attempting to reconnect MicroPico vREPL (best-effort)...'
-    foreach ($cmd in @('micropico.connect', 'microPico.connect')) {
-        if (Invoke-VSCodeCommandBestEffort -CommandId $cmd) {
-            break
-        }
-    }
+    Write-Host 'Asking MicroPico to reconnect its vREPL...'
+    Invoke-MicroPicoBridge -Action 'connect' | Out-Null
 }
 
 function Resolve-MpremoteCommand {
@@ -142,11 +139,23 @@ function Invoke-MpRemote {
     return @($output)
 }
 
-function Test-RemotePathExists {
-    param([string]$RemotePath)
+function Get-MissingRemotePaths {
+    param([string[]]$RemotePaths)
 
-    Invoke-MpRemote -Args @('fs', 'ls', $RemotePath) -AllowFailure | Out-Null
-    return $LASTEXITCODE -eq 0
+    # `mpremote fs ls` fails on files ("Not a directory"), so stat every path on
+    # the device in one run instead. Returns the paths that don't exist.
+    $pathList = ($RemotePaths | ForEach-Object { "'" + $_.TrimStart(':') + "'," }) -join ' '
+    $checkScript = Join-Path $buildDir 'check_paths.py'
+    Set-Content -Path $checkScript -Encoding ascii -Value @(
+        'import os',
+        "for p in ($pathList):",
+        '    try:',
+        '        os.stat(p)',
+        '    except OSError:',
+        "        print('MISSING:' + p)"
+    )
+    $output = Invoke-MpRemote -Args @('run', $checkScript)
+    return @($output | ForEach-Object { "$_" } | Where-Object { $_ -match '^MISSING:(.+)$' } | ForEach-Object { ':' + $Matches[1].Trim() })
 }
 
 function Remove-RemoteFileIfExists {
@@ -170,7 +179,8 @@ function Remove-RemoteDirIfExists {
 }
 
 function Assert-DeviceReachable {
-    param([int]$Attempts = 4)
+    # MicroPico takes about 1.5 s to release the port after being asked.
+    param([int]$Attempts = 6)
 
     for ($i = 1; $i -le $Attempts; $i++) {
         try {
@@ -222,10 +232,12 @@ $remoteFilesToRemove = @($runtimePythonFiles | ForEach-Object { ":/$_" })
 $remoteFilesToRemove += ':/lib/microdot.mpy'
 
 # Remove files left by older deploys. Root copies of libraries would shadow /lib,
-# because the current directory comes first on sys.path.
+# because the current directory comes first on sys.path. A raw /lib/microdot.py
+# (e.g. from a MicroPico upload of src/) would be imported instead of the .mpy.
 $remoteFilesToRemove += @(
     ':/microdot.py',
     ':/microdot.mpy',
+    ':/lib/microdot.py',
     ':/messagetypes.py',
     ':/webui_new.py',
     ':/test_app_inspection.py',
@@ -282,7 +294,7 @@ if (-not (Test-Path $mqttAsLocalDir)) {
 Invoke-MpRemote -Args @('fs', 'cp', '-r', $mqttAsLocalDir, ':/lib/') | Out-Null
 
 $configDeployed = $false
-if ($ResetConfig -or -not (Test-RemotePathExists -RemotePath ':/config.json')) {
+if ($ResetConfig -or @(Get-MissingRemotePaths -RemotePaths @(':/config.json')).Count -gt 0) {
     Write-Host "Copying config from $(Split-Path -Leaf $localConfig)..."
     Invoke-MpRemote -Args @('fs', 'cp', $localConfig, ':/config.json') | Out-Null
     $configDeployed = $true
@@ -292,12 +304,7 @@ else {
 }
 
 Write-Host 'Verifying deployed runtime files...'
-$missing = @()
-foreach ($remotePath in $requiredRemoteFiles) {
-    if (-not (Test-RemotePathExists -RemotePath $remotePath)) {
-        $missing += $remotePath
-    }
-}
+$missing = @(Get-MissingRemotePaths -RemotePaths $requiredRemoteFiles)
 if ($missing.Count -gt 0) {
     throw "Deployment verification failed. Missing on device:`n$($missing -join "`n")"
 }
