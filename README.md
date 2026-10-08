@@ -65,6 +65,7 @@ Wi-Fi credentials and the device name are set through setup mode and stored in `
 | Path | Contents |
 |---|---|
 | `src/` | Device code, deployed to the root of the device. `main.py` is the entry point |
+| `src/www/` | The web UI, deployed to `/www`: a static page that fills itself in from the JSON API |
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
 | `scripts/` | `deploy.ps1`; `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
 | `tools/diagnostics/` | Scripts for checking the HTTP server on a device (`mpremote run tools/diagnostics/<script>.py`) |

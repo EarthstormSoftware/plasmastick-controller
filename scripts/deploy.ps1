@@ -199,6 +199,11 @@ $runtimeFiles = @{ (Join-Path $srcDir 'main.py') = ':/main.py' }
 foreach ($name in $moduleNames) {
     $runtimeFiles[(Join-Path $buildDeviceDir "$name.mpy")] = ":/$name.mpy"
 }
+# Static web UI files, served from /www on the device.
+$wwwDir = Join-Path $srcDir 'www'
+foreach ($file in @(Get-ChildItem -Path $wwwDir -File)) {
+    $runtimeFiles[$file.FullName] = ":/www/$($file.Name)"
+}
 
 # Libraries live in /lib on the device (on MicroPython's default sys.path).
 $microdotMpy = Join-Path $buildLibDir 'microdot.mpy'
@@ -236,6 +241,8 @@ $remoteFilesToRemove += @(
     ':/lib/microdot.py',
     ':/messagetypes.py',
     ':/webui_new.py',
+    ':/webui.py',
+    ':/webui.mpy',
     ':/test_app_inspection.py',
     ':/test_http_diagnostics.py',
     ':/test_http_run.py',
@@ -249,7 +256,7 @@ if (-not $PreserveProvisioning) {
     $remoteFilesToRemove += @(':/provisioning.json', ':/device_name.json')
 }
 
-$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings')
+$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www')
 
 Write-Host 'Resolving mpremote command...'
 $MpremoteCommand = Resolve-MpremoteCommand
@@ -281,6 +288,7 @@ foreach ($remoteDir in $remoteDirsToRemove) {
 }
 
 Write-Host 'Copying firmware files...'
+Invoke-MpRemote -Args @('fs', 'mkdir', ':/www') -AllowFailure | Out-Null
 foreach ($localPath in $runtimeFiles.Keys) {
     Invoke-MpRemote -Args @('fs', 'cp', $localPath, $runtimeFiles[$localPath]) | Out-Null
 }

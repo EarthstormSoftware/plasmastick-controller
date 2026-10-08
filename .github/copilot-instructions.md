@@ -15,7 +15,7 @@
   - `ledstrip.py`: strip state/mode behavior and effects.
   - `picoled.py`: onboard status LED behavior.
   - `devicebutton.py`: local physical button behavior.
-  - `api.py`, `httpserver.py`, `webui.py`: HTTP API + UI surface.
+  - `api.py`, `httpserver.py`: HTTP API. `www/index.html`: the web UI, a static page streamed from flash that loads its values from `/api/info` and `/api/config` (keep it that way rather than building HTML in Python, to save heap).
 - Configuration source of truth is `config.json` on the device, loaded through `deviceconfig.py`. The repo only holds `config.example.json`; a local `config.json` is gitignored.
 
 ## Build And Test

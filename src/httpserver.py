@@ -1,15 +1,19 @@
 import uasyncio as asyncio
-from microdot import Microdot
+from microdot import Microdot, Response
 from log import Log
 
 TAG = "HTTP"
 
+# The web UI is a static page that fills itself in from /api/info and
+# /api/config. It is streamed from flash in small chunks, so serving it
+# never needs one large block of heap.
+INDEX_FILE = '/www/index.html'
+
 class HTTPServer:
     """Microdot-based async HTTP server for API and WebUI."""
 
-    def __init__(self, api, webui, port=80):
+    def __init__(self, api, port=80):
         self.api = api
-        self.webui = webui
         self.port = port
         self.app = self._create_app()
 
@@ -19,7 +23,6 @@ class HTTPServer:
 
         # Get references to self for closures
         api = self.api
-        webui = self.webui
         http_server = self
 
         def _is_form(req):
@@ -30,8 +33,9 @@ class HTTPServer:
         @app.get('/ui')
         async def index(request):
             try:
-                html = webui.get_html()
-                return html, 200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}
+                response = Response.send_file(INDEX_FILE, content_type='text/html; charset=utf-8')
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             except Exception as e:
                 Log.error(TAG, f'Index error: {e}')
                 return 'Server error.', 500, {'Content-Type': 'text/plain; charset=utf-8'}

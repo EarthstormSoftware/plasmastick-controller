@@ -8,7 +8,6 @@ from ledstrip import LedStrip
 from devicebutton import DeviceButton
 from wlan import WLAN
 from api import DeviceAPI
-from webui import WebUI
 from httpserver import HTTPServer
 # provisioning and mqtt_as are imported only when needed, to save heap.
 
@@ -65,8 +64,7 @@ device_api = DeviceAPI(device_config, led_strip, pico_led)
 Log.info(TAG,'Initialising button')
 control_button = DeviceButton(device_config, pico_led, led_strip, device_api)
 
-# Defer WebUI and HTTPServer initialization to save memory at startup
-web_ui = None
+# Defer HTTPServer initialization to save memory at startup
 http_server = None
 
 
@@ -172,7 +170,7 @@ async def heap_monitor():
         await asyncio.sleep(HEAP_LOG_INTERVAL_S)
 
 async def main(client):
-    global web_ui, http_server
+    global http_server
 
     # Start long-running controllers once event loop is active.
     asyncio.create_task(pico_led.controller())
@@ -184,13 +182,12 @@ async def main(client):
     while not wlan.is_connected():
         await asyncio.sleep(1)
     
-    # Now that WLAN is up, initialize WebUI and HTTP server (deferred for memory)
-    Log.info(TAG,'WLAN ready. Initialising Web UI and HTTP server')
+    # Now that WLAN is up, initialize the HTTP server (deferred for memory)
+    Log.info(TAG,'WLAN ready. Initialising HTTP server')
     gc.collect()  # Force garbage collection before allocating large structures
     
     try:
-        web_ui = WebUI(device_api)
-        http_server = HTTPServer(device_api, web_ui, port=80)
+        http_server = HTTPServer(device_api, port=80)
         gc.collect()  # Clean up any temporary allocations
     except Exception as e:
         Log.error(TAG, f'Failed to initialize HTTP server: {e}')

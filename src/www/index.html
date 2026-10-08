@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlasmaStick</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#667eea;min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
+.card{background:#fff;border-radius:12px;width:100%;max-width:500px;overflow:hidden}
+header{padding:20px 20px 0;text-align:center}
+h1{font-size:21px;color:#333;margin-bottom:6px}
+.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px}
+.on{background:#4caf50;color:#fff}
+.off{background:#f44336;color:#fff}
+/* CSS-only tabs - radio inputs drive panel visibility */
+input[name=t]{display:none}
+nav{display:flex;border-bottom:2px solid #eee}
+nav label{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:#aaa;border-bottom:3px solid transparent;transition:.15s}
+nav label:hover{color:#555}
+.pane{display:none;padding:20px}
+#tc:checked~nav label[for=tc],
+#td:checked~nav label[for=td],
+#tn:checked~nav label[for=tn]{color:#667eea;border-bottom-color:#667eea}
+#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn{display:block}
+/* CSS-only mode tabs */
+input[name=m]{display:none}
+.mtabs{display:flex;gap:6px;margin-bottom:12px}
+.mtabs label{flex:1;padding:8px;text-align:center;border:1.5px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#888;transition:.15s}
+.mpane{display:none}
+#mc:checked~.mtabs label[for=mc],
+#mr:checked~.mtabs label[for=mr],
+#mh:checked~.mtabs label[for=mh]{border-color:#667eea;background:#667eea;color:#fff}
+#mc:checked~#mpc,#mr:checked~#mpr,#mh:checked~#mph{display:block}
+/* Sections */
+.sec{font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
+.sec:first-child{margin-top:0}
+/* Power row - inline forms */
+.prow{display:flex;gap:8px;margin-bottom:4px}
+.prow form{flex:1}
+/* Generic inputs */
+.frow{display:flex;gap:8px;margin-bottom:8px}
+.field{flex:1;display:flex;flex-direction:column;gap:3px}
+.field label{font-size:12px;color:#555;font-weight:500}
+input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px}
+input:focus,select:focus{outline:none;border-color:#667eea}
+input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid #ddd;border-radius:6px;cursor:pointer}
+.crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.crow input[type=text]{flex:1}
+/* Buttons */
+.btn{width:100%;padding:10px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+.grn{background:#4caf50;color:#fff}
+.red{background:#f44336;color:#fff}
+.blu{background:#667eea;color:#fff}
+.btn-full:disabled{opacity:.5;cursor:default}
+.btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:#667eea;color:#fff}
+footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
+</style>
+</head>
+<body>
+<div class="card">
+<header>
+  <h1 id="name">PlasmaStick</h1>
+  <span class="badge" id="state">Loading&hellip;</span>
+</header>
+
+<input type="radio" name="t" id="tc" checked>
+<input type="radio" name="t" id="td">
+<input type="radio" name="t" id="tn">
+<nav>
+  <label for="tc">Control</label>
+  <label for="td">Device</label>
+  <label for="tn">Network</label>
+</nav>
+
+<!-- CONTROL PANEL -->
+<div class="pane" id="pc">
+  <div class="sec">Power</div>
+  <div class="prow">
+    <form action="/api/power/on" method="post"><button class="btn grn">ON</button></form>
+    <form action="/api/power/off" method="post"><button class="btn red">OFF</button></form>
+    <form action="/api/power/toggle" method="post"><button class="btn blu">Toggle</button></form>
+  </div>
+
+  <div class="sec">Mode</div>
+  <input type="radio" name="m" id="mc" checked>
+  <input type="radio" name="m" id="mr">
+  <input type="radio" name="m" id="mh">
+  <div class="mtabs">
+    <label for="mc">Colour</label>
+    <label for="mr">Rainbows</label>
+    <label for="mh">CheerLights</label>
+  </div>
+  <div class="mpane" id="mpc">
+    <form action="/api/mode" method="post">
+      <input type="hidden" name="mode" value="Colour">
+      <div class="crow">
+        <input type="color" name="colour" id="colour" value="#ffffff">
+        <button class="btn blu" style="flex:1">Apply Colour</button>
+      </div>
+    </form>
+  </div>
+  <div class="mpane" id="mpr">
+    <form action="/api/mode" method="post">
+      <input type="hidden" name="mode" value="Rainbows">
+      <button class="btn blu">Apply Rainbows</button>
+    </form>
+  </div>
+  <div class="mpane" id="mph">
+    <form action="/api/mode" method="post">
+      <input type="hidden" name="mode" value="CheerLights">
+      <button class="btn blu">Apply CheerLights</button>
+    </form>
+  </div>
+</div>
+
+<!-- DEVICE PANEL -->
+<div class="pane" id="pd">
+  <form action="/ctrl/config" method="post">
+    <input type="hidden" name="tab" value="device">
+    <div class="sec">Identity</div>
+    <div class="frow">
+      <div class="field"><label>Device Name</label>
+        <input type="text" name="device_name" id="device_name" maxlength="32">
+      </div>
+    </div>
+    <div class="sec">LED Hardware</div>
+    <div class="frow">
+      <div class="field"><label>LED Count</label>
+        <input type="number" name="device_led_count" id="device_led_count" min="1" max="300">
+      </div>
+      <div class="field"><label>Type</label>
+        <select name="device_led_rgbw" id="device_led_rgbw">
+          <option value="false">RGB</option>
+          <option value="true">RGBW</option>
+        </select>
+      </div>
+    </div>
+    <div class="sec">Defaults</div>
+    <div class="frow">
+      <div class="field"><label>Default State</label>
+        <select name="default_state" id="default_state">
+          <option value="false">OFF</option>
+          <option value="true">ON</option>
+        </select>
+      </div>
+      <div class="field"><label>Default Mode</label>
+        <select name="default_mode" id="default_mode">
+          <option value="Colour">Colour</option>
+          <option value="Rainbows">Rainbows</option>
+          <option value="CheerLights">CheerLights</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Default Colour</label>
+        <div class="crow">
+          <input type="color" name="default_colour" id="default_colour" value="#ffffff">
+          <span style="font-size:12px;color:#888" id="default_colour_text"></span>
+        </div>
+      </div>
+    </div>
+    <div class="sec">CheerLights</div>
+    <div class="frow">
+      <div class="field"><label>API URL</label>
+        <input type="url" name="cheerlights_url" id="cheerlights_url">
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Update Interval (s)</label>
+        <input type="number" name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
+      </div>
+    </div>
+    <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
+  </form>
+</div>
+
+<!-- NETWORK PANEL -->
+<div class="pane" id="pn">
+  <form action="/ctrl/config" method="post">
+    <input type="hidden" name="tab" value="network">
+    <div class="sec">WiFi</div>
+    <div class="frow">
+      <div class="field"><label>SSID (from provisioning)</label>
+        <input type="text" id="ssid" disabled>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Connect Timeout (s)</label>
+        <input type="number" name="connect_timeout" id="connect_timeout" min="5">
+      </div>
+      <div class="field"><label>Reconnect Wait (s)</label>
+        <input type="number" name="reconnect_wait" id="reconnect_wait" min="5">
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Max Retries (0=unlimited)</label>
+        <input type="number" name="max_retries" id="max_retries" min="0">
+      </div>
+    </div>
+    <div class="sec">MQTT</div>
+    <div class="frow">
+      <div class="field"><label>Enabled</label>
+        <select name="mqtt_enabled" id="mqtt_enabled">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Broker Address</label>
+        <input type="text" name="broker_address" id="broker_address">
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Username</label>
+        <input type="text" name="mqtt_user" id="mqtt_user">
+      </div>
+      <div class="field"><label>Password</label>
+        <input type="password" name="mqtt_password" placeholder="leave blank to keep">
+      </div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Queue Length</label>
+        <input type="number" name="queue_len" id="queue_len" min="1">
+      </div>
+      <div class="field"><label>Clean Session</label>
+        <select name="clean" id="clean">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
+  </form>
+</div>
+
+<footer><span id="footer_name"></span> &bull; PlasmaStick</footer>
+</div>
+<script>
+// Values are set with .value / .textContent, never as HTML, so names and URLs
+// can't inject markup. Save stays disabled until everything has loaded, so a
+// form can't post empty fields over the real config.
+function el(id) { return document.getElementById(id); }
+function sel(id, v) { el(id).value = String(v); }
+Promise.all([fetch('/api/info'), fetch('/api/config')])
+  .then(function (r) {
+    if (!r[0].ok || !r[1].ok) throw new Error('HTTP ' + r[0].status + '/' + r[1].status);
+    return Promise.all([r[0].json(), r[1].json()]);
+  })
+  .then(function (d) {
+    var info = d[0], dev = d[1].device, wl = d[1].wlan, mq = d[1].mqtt;
+    document.title = info.name;
+    el('name').textContent = info.name;
+    el('footer_name').textContent = info.name;
+    var st = el('state');
+    st.textContent = 'Status: ' + (info.state ? 'ON' : 'OFF');
+    st.className = 'badge ' + (info.state ? 'on' : 'off');
+    var modeIds = { Colour: 'mc', Rainbows: 'mr', CheerLights: 'mh' };
+    if (modeIds[info.mode]) el(modeIds[info.mode]).checked = true;
+    var colour = (dev.mode_parameters && dev.mode_parameters.Colour) || '#ffffff';
+    el('colour').value = colour;
+    el('default_colour').value = colour;
+    el('default_colour_text').textContent = colour;
+    el('device_name').value = info.name;
+    el('device_led_count').value = dev.device_led_count;
+    sel('device_led_rgbw', !!dev.device_led_rgbw);
+    sel('default_state', !!dev.default_state);
+    sel('default_mode', dev.default_mode);
+    el('cheerlights_url').value = dev.cheerlights_url;
+    el('cheerlights_update_interval').value = dev.cheerlights_update_interval;
+    el('ssid').value = wl.ssid;
+    el('connect_timeout').value = wl.connect_timeout;
+    el('reconnect_wait').value = wl.reconnect_wait;
+    el('max_retries').value = wl.max_retries;
+    sel('mqtt_enabled', !!mq.enabled);
+    el('broker_address').value = mq.broker_address;
+    el('mqtt_user').value = mq.user;
+    el('queue_len').value = mq.queue_len;
+    sel('clean', !!mq.clean);
+    document.querySelectorAll('.save').forEach(function (b) { b.disabled = false; });
+  })
+  .catch(function (e) {
+    var st = el('state');
+    st.textContent = 'Could not load settings (' + e.message + '). Reload to try again.';
+    st.className = 'badge off';
+  });
+</script>
+</body>
+</html>
