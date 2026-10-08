@@ -7,6 +7,10 @@ from picoled import PicoLed
 
 TAG = "WLAN"
 
+# cyw43 link status 2: associated, waiting for DHCP. The network module has no
+# constant for it.
+STAT_NOIP = 2
+
 class WLAN:
 
     # Initialiser - required
@@ -129,8 +133,8 @@ class WLAN:
                     # Check retry count and set reconnect if we haven't reached the limit
                     # If we have reached the limit, set the state to Inactive.
 
-                    # Still connecting - check connection time out
-                    if (self.wlan.status() == network.STAT_CONNECTING):
+                    # Still connecting or waiting for an IP - check connection time out
+                    if (self.wlan.status() in (network.STAT_CONNECTING, STAT_NOIP)):
                         
                         # Double check to avoid a tiny timing window
                         if (self.wlan.isconnected() == True):

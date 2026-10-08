@@ -39,6 +39,16 @@ _DEFAULT_CONFIG = {
 DEVICE_NAME_FILE = "device_name.json"
 
 
+def _redact_passwords(configdata):
+    """Copy of the config with any password values masked, for logging."""
+    safe = {}
+    for section, values in configdata.items():
+        if isinstance(values, dict):
+            values = {k: ('***' if 'password' in k and v else v) for k, v in values.items()}
+        safe[section] = values
+    return safe
+
+
 def _load_renamed_device_name():
     """Return the name set from the web UI/API (device_name.json), if any."""
     try:
@@ -123,7 +133,7 @@ class DeviceConfig:
         try:
             with open("config.json") as fp:
                 configdata = ujson.load(fp)
-            Log.info(TAG,configdata)
+            Log.info(TAG, _redact_passwords(configdata))
         except OSError as e:
             Log.error(TAG, f'Failed to read config.json: {e}')
             Log.warn(TAG, 'Using built-in defaults.')
