@@ -21,26 +21,39 @@ Log.start()
 Log.info(TAG,'Plasma Stick starting')
 device_config = DeviceConfig.loadConfigFromFile()
 
-# Check if WiFi provisioning is needed
+# Setup mode runs when there are no saved Wi-Fi credentials, when wlan.py
+# asked for it because Wi-Fi never connected, or when the button is held at
+# power-on. Saved credentials are only replaced once new ones are submitted.
+setup_reason = None
 if DeviceConfig.provisioning_needed():
-    Log.warn(TAG,'WiFi provisioning required. Starting AP mode.')
+    setup_reason = 'no saved Wi-Fi credentials'
+if DeviceConfig.take_setup_request() and not setup_reason:
+    setup_reason = 'Wi-Fi did not connect after the last boot'
+if not setup_reason and DeviceButton.held_at_boot():
+    setup_reason = 'button held at power-on'
+
+if setup_reason:
+    Log.warn(TAG, f'WiFi provisioning required ({setup_reason}). Starting AP mode.')
     from provisioning import Provisioning
-    provisioning = Provisioning()
-    
+    provisioning = Provisioning(device_config.device_name)
+
     async def run_provisioning():
         pico_led = PicoLed()
         asyncio.create_task(pico_led.controller())
         pico_led.set_state(True, True, 500)  # Flash LED to indicate AP mode
 
-        success = await provisioning.run_provisioning_loop()
-        if success:
-            Log.info(TAG,'Provisioning complete. Restarting...')
-            import machine
-            machine.soft_reset()
-        else:
-            Log.error(TAG,'Provisioning failed. Falling back to config.json settings.')
-            pico_led.set_state(False, False)
-    
+        while True:
+            if await provisioning.run_provisioning_loop():
+                Log.info(TAG,'Provisioning complete. Restarting...')
+                import machine
+                machine.soft_reset()
+            # The SSID comes from provisioning.json, or from config.json on older setups.
+            if device_config.wlanconfig.ssid:
+                Log.warn(TAG,'Setup mode timed out. Carrying on with the saved Wi-Fi settings.')
+                break
+            Log.warn(TAG,'Setup mode timed out with no Wi-Fi settings saved. Starting it again.')
+        pico_led.set_state(False, False)
+
     try:
         asyncio.run(run_provisioning())
     except KeyboardInterrupt:

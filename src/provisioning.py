@@ -1,4 +1,5 @@
 import network
+import os
 import ujson
 import time
 import uasyncio as asyncio
@@ -6,6 +7,7 @@ from microdot import Microdot
 from log import Log
 from wificrypto import encrypt_password
 from deviceidentity import generate_default_device_name, sanitize_device_name
+from deviceconfig import DEVICE_NAME_FILE
 from captivedns import CaptiveDNS
 
 TAG = "PROV"
@@ -18,7 +20,9 @@ class Provisioning:
     from a connected client via simple HTTP form interface.
     """
     
-    def __init__(self):
+    def __init__(self, device_name=None):
+        # The form starts with the name in use, so re-running setup keeps it.
+        self.device_name = device_name
         self.provisioning_file = "provisioning.json"
         self.ap = network.WLAN(network.AP_IF)
         self.available_networks = []
@@ -55,6 +59,12 @@ class Provisioning:
         try:
             with open(self.provisioning_file, 'w') as f:
                 ujson.dump(config, f)
+            # A name saved earlier from the web UI would take priority over the
+            # one just entered here, so drop it.
+            try:
+                os.remove(DEVICE_NAME_FILE)
+            except OSError:
+                pass
             Log.info(TAG, 'Provisioning config saved.')
             return True
         except OSError as e:
@@ -114,7 +124,7 @@ class Provisioning:
         if networks is None:
             networks = []
         if device_name is None:
-            device_name = generate_default_device_name()
+            device_name = self.device_name or generate_default_device_name()
 
         network_options = ''.join(f'<option value="{n}">' for n in networks)
 

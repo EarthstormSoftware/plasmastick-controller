@@ -1,4 +1,5 @@
 from log import Log
+import os
 import ujson
 import machine
 from wificrypto import decrypt_password
@@ -36,6 +37,8 @@ _DEFAULT_CONFIG = {
 
 
 DEVICE_NAME_FILE = "device_name.json"
+# Written by wlan.py to ask for setup mode on the next boot; removed when read.
+SETUP_REQUEST_FILE = "setup_request"
 
 
 def _redact_passwords(configdata):
@@ -125,6 +128,21 @@ class DeviceConfig:
             pass
         Log.info(TAG, 'No valid provisioning found. AP mode provisioning needed.')
         return True
+
+    @staticmethod
+    def request_setup_mode():
+        """Ask for setup mode on the next boot, keeping the saved credentials."""
+        with open(SETUP_REQUEST_FILE, 'w') as fp:
+            fp.write('1')
+
+    @staticmethod
+    def take_setup_request():
+        """Return True (once) if setup mode was requested for this boot."""
+        try:
+            os.remove(SETUP_REQUEST_FILE)
+            return True
+        except OSError:
+            return False
 
     @staticmethod
     def loadConfigFromFile():

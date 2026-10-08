@@ -4,9 +4,23 @@ import machine
 from log import Log
 
 TAG = "BTN"
+BUTTON_PIN = "GP4"
 
 class DeviceButton:
-    
+
+    @staticmethod
+    def held_at_boot(hold_ms=1000):
+        """True if the button is held down for hold_ms from boot.
+        Called before the event loop starts, so it may block briefly."""
+        pin = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+        start = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start) < hold_ms:
+            if pin.value() != 0:
+                return False
+            time.sleep_ms(20)
+        Log.info(TAG, 'Button held at power-on')
+        return True
+
     # Initialiser - requires
     def __init__(self, device_config, pico_led, led_strip, api=None):
         self.current_state = False
@@ -22,7 +36,7 @@ class DeviceButton:
         self.last_edge_ticks = 0
         self.last_raw_pressed = False
         
-        self.device_button = machine.Pin("GP4", machine.Pin.IN, machine.Pin.PULL_UP)
+        self.device_button = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
         self.device_config = device_config
         self.pico_led = pico_led
         self.led_strip = led_strip

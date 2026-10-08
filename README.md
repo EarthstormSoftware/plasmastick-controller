@@ -12,9 +12,14 @@ API, MQTT, or the button on the board.
   minutes. Join it, then open any `http://` address (for example `http://example.com`) and you're redirected to the
   setup page at `http://192.168.4.1`. Some phones also pop up a "Sign in to network" prompt, but don't rely on it.
   The Wi-Fi password is stored encrypted with a key derived from the device.
+- Getting back into setup mode (for a new router or a mistyped password): hold the button while powering on, or
+  just wait. If Wi-Fi hasn't connected after 5 attempts since boot (about 2-3 minutes), the device restarts into
+  setup mode by itself. Either way it keeps its saved settings until new ones are submitted, and if setup mode times
+  out it carries on with them, so a router that was slow to start after a power cut is still joined.
 - Web UI and JSON HTTP API on port 80.
 - Optional MQTT control, using [mqtt_as](https://github.com/peterhinch/micropython-mqtt).
-- Button: a short press toggles the lights on and off; a long press returns to the default mode.
+- Button: a short press toggles the lights on and off; a long press returns to the default mode. Held at power-on,
+  it starts setup mode.
 
 ## Pre-requisites
 

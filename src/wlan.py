@@ -1,6 +1,7 @@
 from log import Log
 import uasyncio as asyncio
 import network
+import machine
 import time
 from deviceconfig import DeviceConfig, WlanConfig
 from picoled import PicoLed
@@ -10,6 +11,12 @@ TAG = "WLAN"
 # cyw43 link status 2: associated, waiting for DHCP. The network module has no
 # constant for it.
 STAT_NOIP = 2
+
+# If Wi-Fi hasn't connected once since boot after this many attempts (or the
+# retry limit is reached first), restart into setup mode. The saved settings
+# are kept, so a router that was just slow to start is joined after setup
+# mode times out.
+SETUP_FALLBACK_ATTEMPTS = 5
 
 class WLAN:
 
@@ -33,6 +40,8 @@ class WLAN:
         
         # Indicates the connection was previously active and working
         self.was_connected = False
+        # Whether Wi-Fi has connected at all since boot
+        self.ever_connected = False
         self.retry_count = 0
 
         # Time when the last connect attempt started
@@ -81,6 +90,7 @@ class WLAN:
             if (self.was_connected == False):
                 self.pico_led.set_state(True, False)
                 self.was_connected = True
+                self.ever_connected = True
                 self.retry_count = 0
                 self.up.set()
                 self.down.clear()
@@ -115,6 +125,17 @@ class WLAN:
     def can_retry(self):
         return self.wlanconfig.max_retries == 0 or self.retry_count < self.wlanconfig.max_retries
 
+    def _attempt_failed(self, reason):
+        if not self.ever_connected and (self.retry_count >= SETUP_FALLBACK_ATTEMPTS or not self.can_retry()):
+            Log.error(TAG, f'{reason}. No connection since boot after {self.retry_count} attempts, so restarting into setup mode.')
+            DeviceConfig.request_setup_mode()
+            machine.soft_reset()
+        if self.can_retry():
+            self.disconnect(True)
+        else:
+            self.disconnect(False)
+            Log.error(TAG, f'{reason} and max retries reached.')
+
     # Pico WLAN Controller
     async def controller(self):
         
@@ -141,20 +162,11 @@ class WLAN:
                             self.set_connected() 
                         else:
                             if (current_time - self.time_last_connect_started > self.wlanconfig.connect_timeout):
-                                if self.can_retry():
-                                    self.disconnect(True)
-                                else:
-                                    self.disconnect(False)
-                                    Log.error(TAG,'WLAN connect timed out and max retries reached.')
+                                self._attempt_failed('WLAN connect timed out')
                     elif (self.wlan.status() == network.STAT_GOT_IP):
                         self.set_connected()
                     else:
-                        Log.error(TAG,'WLAN failed to connect, state: ' + str(self.wlan.status()))
-                        if self.can_retry():
-                            self.disconnect(True)
-                        else:
-                            self.disconnect(False)
-                            Log.error(TAG,'WLAN failed and max retries reached.')
+                        self._attempt_failed('WLAN failed to connect, state: ' + str(self.wlan.status()))
                                        
                 # WLAN is not connected, but we are waiting to trigger a reconnect
                 elif self.current_state == 3:
