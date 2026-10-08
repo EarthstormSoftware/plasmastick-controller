@@ -15,11 +15,12 @@ from httpserver import HTTPServer
 
 TAG = "MAIN"
 
-Log.set_log_level(2)
+Log.set_log_level(1)  # until config.json's device.log_level is loaded
 Log.set_use_datetime(True)
 Log.start()
 Log.info(TAG,'Plasma Stick starting')
 device_config = DeviceConfig.loadConfigFromFile()
+Log.set_log_level(device_config.log_level)
 
 # Setup mode runs when there are no saved Wi-Fi credentials, when wlan.py
 # asked for it because Wi-Fi never connected, or when the button is held at

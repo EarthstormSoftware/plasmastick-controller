@@ -106,3 +106,10 @@ def test_good_saved_colour_and_url(api):
                                         'cheerlights_url': ' http://example.com/last.json '}})
     assert ok
     assert saved_config(api)['device']['cheerlights_url'] == 'http://example.com/last.json'
+
+
+def test_log_level_is_saved_and_checked(api):
+    assert api.save_config({'device': {'log_level': 3}}) == (False, 'log_level must be 0, 1 or 2')
+    assert api.save_config({'device': {'log_level': 0}}) == (True, None)
+    assert saved_config(api)['device']['log_level'] == 0
+    assert api.get_config()['device']['log_level'] == 1  # the running level changes on restart

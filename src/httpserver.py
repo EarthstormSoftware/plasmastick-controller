@@ -198,6 +198,7 @@ class HTTPServer:
                         'default_state': form.get('default_state', 'false') == 'true',
                         'cheerlights_url': form.get('cheerlights_url', ''),
                         'cheerlights_update_interval': int(form.get('cheerlights_update_interval', 60)),
+                        'log_level': int(form.get('log_level', 1)),
                     }
                     name = (form.get('device_name') or '').strip()
                     if name:

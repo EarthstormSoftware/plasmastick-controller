@@ -110,6 +110,7 @@ class DeviceAPI:
                 'default_state': dc.default_state,
                 'cheerlights_url': dc.cheerlights_url,
                 'cheerlights_update_interval': dc.cheerlights_update_interval,
+                'log_level': dc.log_level,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -178,6 +179,12 @@ class DeviceAPI:
                 if v < 10:
                     return False, 'cheerlights_update_interval must be >= 10'
                 cfg['device']['cheerlights_update_interval'] = v
+
+            if 'log_level' in dev:
+                v = int(dev['log_level'])
+                if v not in (0, 1, 2):
+                    return False, 'log_level must be 0, 1 or 2'
+                cfg['device']['log_level'] = v
 
             # WLAN section (SSID comes from provisioning, not config.json)
             if 'connect_timeout' in wlan:

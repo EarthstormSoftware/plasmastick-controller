@@ -170,6 +170,16 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
         <input type="number" name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
       </div>
     </div>
+    <div class="sec">Diagnostics</div>
+    <div class="frow">
+      <div class="field"><label>Log Level (USB serial log)</label>
+        <select name="log_level" id="log_level">
+          <option value="0">Warnings and errors</option>
+          <option value="1">Info</option>
+          <option value="2">Debug</option>
+        </select>
+      </div>
+    </div>
     <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
   </form>
 </div>
@@ -287,6 +297,7 @@ Promise.all([fetch('/api/info'), fetch('/api/config')])
     sel('device_led_rgbw', !!dev.device_led_rgbw);
     sel('default_state', !!dev.default_state);
     sel('default_mode', dev.default_mode);
+    sel('log_level', dev.log_level);
     el('cheerlights_url').value = dev.cheerlights_url;
     el('cheerlights_update_interval').value = dev.cheerlights_update_interval;
     el('ssid').value = wl.ssid;

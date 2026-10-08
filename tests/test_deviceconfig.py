@@ -88,3 +88,11 @@ def test_passwords_are_masked_for_logging():
 ])
 def test_device_names_are_sanitised(raw, expected):
     assert sanitize_device_name(raw) == expected
+
+
+def test_log_level_defaults_to_info_and_rejects_bad_values(device_dir):
+    assert DeviceConfig.loadConfigFromFile().log_level == 1
+    write(device_dir / 'config.json', {'device': {'log_level': 2}})
+    assert DeviceConfig.loadConfigFromFile().log_level == 2
+    write(device_dir / 'config.json', {'device': {'log_level': 'loud'}})
+    assert DeviceConfig.loadConfigFromFile().log_level == 1

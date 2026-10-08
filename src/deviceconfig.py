@@ -18,6 +18,8 @@ _DEFAULT_CONFIG = {
         # http, as in config.example.json: a TLS handshake holds the CPU for about a second.
         "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
         "cheerlights_update_interval": 60,
+        # 0 = warnings and errors, 1 = also info, 2 = also debug
+        "log_level": 1,
     },
     "wlan": {
         "ssid": "",
@@ -122,6 +124,10 @@ class DeviceConfig:
         self.default_state = configdata["device"]["default_state"]                
         self.cheerlights_url = configdata["device"]["cheerlights_url"]
         self.cheerlights_update_interval = configdata["device"]["cheerlights_update_interval"]
+        self.log_level = configdata["device"]["log_level"]
+        if self.log_level not in (0, 1, 2):
+            Log.warn(TAG, f'Ignoring log_level {self.log_level!r}; it must be 0, 1 or 2')
+            self.log_level = 1
 
         self.wlanconfig = WlanConfig(configdata["wlan"])
         self.mqttconfig = MQTTConfig(self.device_name, configdata["mqtt"])

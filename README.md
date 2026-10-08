@@ -83,6 +83,9 @@ gitignored, so passwords won't be committed).
 
 Wi-Fi credentials and the device name are set through setup mode and stored in `provisioning.json` on the device.
 
+The USB serial log's detail is set by `device.log_level` (Device tab): 0 for warnings and errors, 1 (the default) to
+add info, 2 to add debug. It takes effect on the next restart.
+
 ## MQTT
 
 With MQTT enabled (Network tab, or `mqtt` in `config.json`), the device uses these topics, where `<name>` is its device

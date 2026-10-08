@@ -7,7 +7,8 @@
         "mode_parameters": {"Colour": "#FFFFFF"},
         "default_state": false,
         "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
-        "cheerlights_update_interval": 120
+        "cheerlights_update_interval": 120,
+        "log_level": 1
     },
     "wlan": {
         "ssid": "",
