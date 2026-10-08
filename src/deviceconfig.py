@@ -9,7 +9,7 @@ TAG = "CFG"
 
 _DEFAULT_CONFIG = {
     "device": {
-        "device_name": "PicoLights-UNKNOWN",
+        "device_name": "",  # empty: generated from the board's unique id
         "device_led_count": 10,
         "device_led_rgbw": False,
         "default_mode": "Colour",
@@ -51,6 +51,26 @@ def _redact_passwords(configdata):
     return safe
 
 
+def _merge_with_defaults(configdata):
+    """Fill in anything config.json leaves out from _DEFAULT_CONFIG, so an older
+    or hand-edited file still boots. Logs the keys that were missing."""
+    merged = {}
+    missing = []
+    for section, defaults in _DEFAULT_CONFIG.items():
+        values = configdata.get(section)
+        if not isinstance(values, dict):
+            values = {}
+        merged[section] = dict(defaults)
+        merged[section].update(values)
+        missing += [f'{section}.{key}' for key in defaults if key not in values]
+    for section, values in configdata.items():
+        if section not in merged:
+            merged[section] = values
+    if missing:
+        Log.warn(TAG, f'config.json has no {", ".join(missing)}; using defaults')
+    return merged
+
+
 def _load_renamed_device_name():
     """Return the name set from the web UI/API (device_name.json), if any."""
     try:
@@ -84,7 +104,9 @@ class DeviceConfig:
         # It is used as the MQTT client id and the network hostname.
         provisioning = _load_provisioning_data()
         provisioned_name = provisioning.get('device_name') if provisioning else None
-        configured_name = configdata["device"].get("device_name", "")
+        # The merged config, which the API saves changes on top of.
+        self.configdata = configdata
+        configured_name = configdata["device"]["device_name"]
         self.device_name = sanitize_device_name(_load_renamed_device_name() or provisioned_name or configured_name)
         self.device_led_count = configdata["device"]["device_led_count"]
         self.device_led_rgbw = configdata["device"]["device_led_rgbw"]
@@ -150,17 +172,19 @@ class DeviceConfig:
         try:
             with open("config.json") as fp:
                 configdata = ujson.load(fp)
+            if not isinstance(configdata, dict):
+                raise ValueError('top level is not an object')
             Log.info(TAG, _redact_passwords(configdata))
         except OSError as e:
             Log.error(TAG, f'Failed to read config.json: {e}')
             Log.warn(TAG, 'Using built-in defaults.')
-            configdata = _DEFAULT_CONFIG
+            configdata = {}
         except ValueError as e:
             Log.error(TAG, f'Invalid JSON in config.json: {e}')
             Log.warn(TAG, 'Using built-in defaults.')
-            configdata = _DEFAULT_CONFIG
+            configdata = {}
 
-        return DeviceConfig(configdata)
+        return DeviceConfig(_merge_with_defaults(configdata))
     
     @staticmethod
     def saveConfigToFile(configdata):

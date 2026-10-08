@@ -21,17 +21,10 @@ class DeviceAPI:
         # The name in use (MQTT client id, hostname) is device_config.device_name.
         # A rename is saved here and takes effect on the next restart.
         self.device_name = device_config.device_name
-        # Cache config to reduce file I/O allocations on saves
-        self._config_cache = self._load_config_cache()
-
-    def _load_config_cache(self):
-        """Load config from file once at startup and cache it."""
-        try:
-            with open('config.json') as fp:
-                return ujson.load(fp)
-        except Exception as e:
-            Log.error(TAG, f'Failed to load config cache: {e}')
-            return {}
+        # Saves start from the config loaded at boot (config.json merged with
+        # defaults), so they also fill in any keys an older file was missing.
+        # A copy, so changes here don't alter the live settings in device_config.
+        self._config_cache = ujson.loads(ujson.dumps(device_config.configdata))
     
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
