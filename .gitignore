@@ -11,7 +11,7 @@ build/
 __pycache__/
 *.pyc
 
-# Stubs (installed via requirements-dev.txt, not committed)
+# Editor stubs (installed with pip --target typings, see README; not committed)
 typings/
 
 # Logs and backups

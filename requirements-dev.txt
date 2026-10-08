@@ -2,6 +2,6 @@
 # Install into a venv:  py -m venv .venv ; .venv\Scripts\pip install -r requirements-dev.txt
 mpremote
 mpy-cross  # keep its major.minor in line with the device firmware (bytecode format must match)
-micropython-rp2-rpi_pico_w-stubs
+# Editor stubs go in typings/ instead (see README): py -m pip install --target typings micropython-rp2-rpi_pico_w-stubs
 pyserial  # scripts/device_log.py (also installed by mpremote)
 paho-mqtt>=2.0  # scripts/smoke_test.py

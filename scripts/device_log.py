@@ -12,8 +12,6 @@ Exit codes: 0 ok, 1 problems found or boot milestones missing, 3 serial port una
 import argparse
 import os
 import re
-import shutil
-import subprocess
 import sys
 import time
 
@@ -49,34 +47,6 @@ def find_pico_port():
     return None
 
 
-def micropico_bridge(action):
-    """Ask the MicroPico Bridge extension (tools/vscode-micropico-bridge) to
-    'disconnect' or 'connect' the MicroPico vREPL. Returns False if VS Code isn't found."""
-    code = shutil.which('code')
-    if not code:
-        return False
-    subprocess.run([code, '--open-url', f'vscode://earthstorm.micropico-bridge/{action}'],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return True
-
-
-def open_serial(port, disconnect_repl):
-    try:
-        return serial.Serial(port, 115200, timeout=0.5)
-    except serial.SerialException:
-        if not disconnect_repl or not micropico_bridge('disconnect'):
-            raise
-    # MicroPico takes about 1.5 s to release the port.
-    deadline = time.monotonic() + 8
-    while True:
-        time.sleep(1)
-        try:
-            return serial.Serial(port, 115200, timeout=0.5)
-        except serial.SerialException:
-            if time.monotonic() > deadline:
-                raise
-
-
 def soft_reset(ser):
     # Ctrl-C stops main.py and drops to the REPL, Ctrl-D then soft-resets,
     # which runs main.py again from the start.
@@ -100,10 +70,6 @@ def main():
                         help='Stop early once HTTP and MQTT (or MQTT disabled) are up')
     parser.add_argument('--out', default=os.path.join('build', 'device.log'), help='Log file (default build/device.log)')
     parser.add_argument('--quiet', action='store_true', help="Don't echo log lines while reading")
-    parser.add_argument('--no-disconnect-repl', action='store_true',
-                        help="Don't ask MicroPico to release a busy port")
-    parser.add_argument('--reconnect-repl', action='store_true',
-                        help='Ask MicroPico to reconnect its vREPL afterwards')
     args = parser.parse_args()
 
     port = args.port or find_pico_port()
@@ -112,9 +78,9 @@ def main():
         return 3
 
     try:
-        ser = open_serial(port, not args.no_disconnect_repl)
+        ser = serial.Serial(port, 115200, timeout=0.5)
     except serial.SerialException as e:
-        print(f'SERIAL_ERROR {port} is unavailable ({e}). If the MicroPico vREPL is connected, disconnect it.')
+        print(f'SERIAL_ERROR {port} is unavailable ({e}). Close whatever has it open (a REPL, a deploy).')
         return 3
 
     found = {}
@@ -142,9 +108,6 @@ def main():
                     problems.append((name, line))
             if args.until_ready and is_ready(found):
                 break
-
-    if args.reconnect_repl:
-        micropico_bridge('connect')
 
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     with open(args.out, 'w', encoding='utf-8') as fp:

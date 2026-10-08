@@ -2,9 +2,7 @@ param(
     [switch]$PreserveProvisioning = $true,
     [switch]$ResetConfig,
     [switch]$SkipReset,
-    [string]$Port,
-    [switch]$DisconnectRepl = $true,
-    [switch]$ReconnectRepl = $true
+    [string]$Port
 )
 
 Set-StrictMode -Version Latest
@@ -18,49 +16,6 @@ $deployStart = Get-Date
 
 $MpremoteCommand = $null
 $SelectedPort = $null
-
-# VS Code has no command-line way to run an extension's commands, so the MicroPico
-# vREPL is driven through the MicroPico Bridge extension's URI handler
-# (tools/vscode-micropico-bridge). Without that extension these do nothing.
-function Invoke-MicroPicoBridge {
-    param([string]$Action)
-
-    if (-not (Get-Command code -ErrorAction SilentlyContinue)) {
-        return $false
-    }
-
-    try {
-        & code --open-url "vscode://earthstorm.micropico-bridge/$Action" 2>$null | Out-Null
-        return $true
-    }
-    catch {
-        return $false
-    }
-}
-
-$script:ReplDisconnected = $false
-
-function Disconnect-MicroPicoReplBestEffort {
-    if (-not $DisconnectRepl) {
-        return
-    }
-
-    Write-Host 'Asking MicroPico to disconnect its vREPL (needs the MicroPico Bridge extension)...'
-    $script:ReplDisconnected = Invoke-MicroPicoBridge -Action 'disconnect'
-    if (-not $script:ReplDisconnected) {
-        Write-Host 'Could not reach VS Code. Continuing with mpremote retries.'
-    }
-}
-
-function Reconnect-MicroPicoReplBestEffort {
-    # Only reconnect if this script disconnected it.
-    if (-not $ReconnectRepl -or -not $script:ReplDisconnected) {
-        return
-    }
-
-    Write-Host 'Asking MicroPico to reconnect its vREPL...'
-    Invoke-MicroPicoBridge -Action 'connect' | Out-Null
-}
 
 function Resolve-MpremoteCommand {
     if (Get-Command mpremote -ErrorAction SilentlyContinue) {
@@ -179,8 +134,7 @@ function Remove-RemoteDirIfExists {
 }
 
 function Assert-DeviceReachable {
-    # MicroPico takes about 1.5 s to release the port after being asked.
-    param([int]$Attempts = 6)
+    param([int]$Attempts = 3)
 
     for ($i = 1; $i -le $Attempts; $i++) {
         try {
@@ -188,11 +142,8 @@ function Assert-DeviceReachable {
             return
         }
         catch {
-            if ($i -eq 1) {
-                Disconnect-MicroPicoReplBestEffort
-            }
             if ($i -eq $Attempts) {
-                throw
+                throw "Device not reachable. If the port is in use, close whatever has it open (a REPL, another deploy).`n$_"
             }
             Write-Host "Device not reachable yet (attempt $i/$Attempts). Retrying..."
             Start-Sleep -Seconds 1
@@ -233,7 +184,7 @@ $remoteFilesToRemove += ':/lib/microdot.mpy'
 
 # Remove files left by older deploys. Root copies of libraries would shadow /lib,
 # because the current directory comes first on sys.path. A raw /lib/microdot.py
-# (e.g. from a MicroPico upload of src/) would be imported instead of the .mpy.
+# (e.g. from copying src/ by hand) would be imported instead of the .mpy.
 $remoteFilesToRemove += @(
     ':/microdot.py',
     ':/microdot.mpy',
@@ -313,8 +264,6 @@ if (-not $SkipReset) {
     Write-Host 'Soft resetting device...'
     Invoke-MpRemote -Args @('exec', 'import machine; machine.soft_reset()') | Out-Null
 }
-
-Reconnect-MicroPicoReplBestEffort
 
 $deployEnd = Get-Date
 $durationSeconds = [int]($deployEnd - $deployStart).TotalSeconds

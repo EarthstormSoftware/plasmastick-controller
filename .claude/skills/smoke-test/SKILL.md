@@ -17,12 +17,8 @@ Arguments: `$ARGUMENTS`
 ## 1. Preflight
 
 - `py -c "import serial, paho.mqtt"` must succeed. If not: `py -m pip install --user -r requirements-dev.txt`.
-- The serial port must be free. `deploy.ps1` and `device_log.py` ask MicroPico to release it through the MicroPico
-  Bridge extension (`tools/vscode-micropico-bridge`). If a step still reports the port in use (`SERIAL_ERROR` or
-  `failed to access COMx`), the bridge isn't installed or VS Code didn't pass the request on. Stop and ask the user
-  to click **Pico Connected** in the VS Code status bar to disconnect, then carry on.
-- When everything is finished, run `code --open-url vscode://earthstorm.micropico-bridge/connect` to give the
-  vREPL back to the user.
+- The serial port must be free. If a step reports it in use (`SERIAL_ERROR` or `failed to access COMx`), something
+  else has it open, usually an `mpremote repl` session. Stop and ask the user to close it, then carry on.
 
 ## 2. Deploy (unless `--no-deploy`)
 
