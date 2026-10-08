@@ -9,6 +9,27 @@ TAG = "LEDS"
 # The lighting modes the strip supports.
 MODES = ('Colour', 'CheerLights', 'Rainbows')
 
+_HEX_DIGITS = '0123456789abcdefABCDEF'
+
+
+def is_valid_colour(value):
+    """True for a '#RRGGBB' (or 'RRGGBB') hex colour string."""
+    if not isinstance(value, str):
+        return False
+    digits = value[1:] if value.startswith('#') else value
+    return len(digits) == 6 and all(c in _HEX_DIGITS for c in digits)
+
+
+def mode_parameters_error(mode, parameters):
+    """Why parameters can't be used for mode, or None if they can."""
+    if parameters is None:
+        return None
+    if not isinstance(parameters, dict):
+        return 'Mode parameters must be an object'
+    if mode == 'Colour' and 'Colour' in parameters and not is_valid_colour(parameters['Colour']):
+        return 'Colour must be a #RRGGBB hex colour'
+    return None
+
 class LedStrip:
     def __init__(self, device_config):
         self.device_config = device_config

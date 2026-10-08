@@ -12,13 +12,13 @@ import asynchttp
     ('http://192.168.1.5:8080/x?y=1', (False, '192.168.1.5', 8080, '/x?y=1')),
 ])
 def test_parse_url(url, expected):
-    assert asynchttp._parse_url(url) == expected
+    assert asynchttp.parse_url(url) == expected
 
 
 @pytest.mark.parametrize('url', ['ftp://example.com/', 'example.com/x', 'http:///path'])
 def test_parse_url_rejects_unusable_urls(url):
     with pytest.raises(ValueError):
-        asynchttp._parse_url(url)
+        asynchttp.parse_url(url)
 
 
 async def serve(response, delay=0.0):

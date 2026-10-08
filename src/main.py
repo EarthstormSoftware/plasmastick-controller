@@ -129,7 +129,7 @@ async def messages(client):
             elif message_type == "ModeChange":
                 new_mode = parameters.get("Mode")
                 if not device_api.set_mode(new_mode, parameters.get("ModeParameters")):
-                    Log.warn(TAG, 'Ignoring ModeChange with invalid Mode')
+                    Log.warn(TAG, 'Ignoring ModeChange with invalid Mode or ModeParameters')
             else:
                 Log.warn(TAG, f'Ignoring unsupported control message type: {message_type}')
         except Exception as e:

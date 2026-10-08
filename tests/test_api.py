@@ -71,3 +71,38 @@ def test_device_name_rules(api):
     assert api.device_name == 'Jack-O-Lantern'
     assert not api.set_device_name('')
     assert not api.set_device_name('x' * 33)
+
+
+@pytest.mark.parametrize('colour', ['#ffc0cb', 'FFC0CB', '#00aAfF'])
+def test_valid_colours_are_accepted(api, colour):
+    assert api.set_mode('Colour', {'Colour': colour})
+    assert api.led_strip.mode_parameters == {'Colour': colour}
+
+
+@pytest.mark.parametrize('parameters', [{'Colour': '#ffc0c'}, {'Colour': 'pink'}, {'Colour': 123}, '#ffc0cb', ['x']])
+def test_bad_colours_and_parameters_are_rejected(api, parameters):
+    api.set_mode('Rainbows')
+    assert not api.set_mode('Colour', parameters)
+    assert api.led_strip.next_mode == 'Rainbows'  # unchanged
+
+
+def test_other_modes_ignore_colour_parameters(api):
+    assert api.set_mode('Rainbows', {'Colour': 'not checked'})
+
+
+@pytest.mark.parametrize('updates, error', [
+    ({'device': {'mode_parameters': {'Colour': 'red'}}}, 'Colour must be a #RRGGBB hex colour'),
+    ({'device': {'mode_parameters': 'x'}}, 'Mode parameters must be an object'),
+    ({'device': {'mode_parameters': None}}, 'Mode parameters must be an object'),
+    ({'device': {'cheerlights_url': 'api.thingspeak.com/x'}}, 'cheerlights_url must be an http:// or https:// URL'),
+    ({'device': {'cheerlights_url': 'ftp://x/'}}, 'cheerlights_url must be an http:// or https:// URL'),
+])
+def test_bad_saved_colours_and_urls_are_rejected(api, updates, error):
+    assert api.save_config(updates) == (False, error)
+
+
+def test_good_saved_colour_and_url(api):
+    ok, _ = api.save_config({'device': {'mode_parameters': {'Colour': '#112233'},
+                                        'cheerlights_url': ' http://example.com/last.json '}})
+    assert ok
+    assert saved_config(api)['device']['cheerlights_url'] == 'http://example.com/last.json'

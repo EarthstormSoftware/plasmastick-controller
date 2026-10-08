@@ -99,14 +99,15 @@ class HTTPServer:
                     mode = form.get('mode', 'Colour')
                     colour = form.get('colour')
                     params = {'Colour': colour} if (mode == 'Colour' and colour) else None
-                    api.set_mode(mode, params)
+                    if not api.set_mode(mode, params):
+                        return '<html><body><p>Error: invalid mode or colour.</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
                     return '', 303, {'Location': '/'}
                 data = request.json or {}
                 mode = data.get('mode', '')
                 parameters = data.get('parameters')
                 if api.set_mode(mode, parameters):
                     return {'success': True, 'mode': mode}
-                return {'success': False, 'error': 'Invalid mode'}, 400
+                return {'success': False, 'error': 'Invalid mode or parameters'}, 400
             except Exception as e:
                 Log.error(TAG, f'Mode request failed: {e}')
                 return {'success': False, 'error': str(e)}, 400

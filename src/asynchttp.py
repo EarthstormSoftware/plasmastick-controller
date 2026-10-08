@@ -14,7 +14,7 @@ MAX_BODY = 4096
 _addresses = {}
 
 
-def _parse_url(url):
+def parse_url(url):
     scheme, sep, rest = url.partition('://')
     if not sep or scheme not in ('http', 'https'):
         raise ValueError('URL must start with http:// or https://')
@@ -70,7 +70,7 @@ async def _get(use_tls, host, port, path):
 async def get_json(url, timeout_s=10):
     """GET url and parse the body as JSON without blocking other tasks
     (apart from the first DNS lookup of each host). Raises on any failure."""
-    use_tls, host, port, path = _parse_url(url)
+    use_tls, host, port, path = parse_url(url)
     try:
         return await asyncio.wait_for(_get(use_tls, host, port, path), timeout_s)
     except BaseException:

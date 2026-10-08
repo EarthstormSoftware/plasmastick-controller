@@ -4,7 +4,8 @@ import machine
 from log import Log
 from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
 from deviceidentity import sanitize_device_name
-from ledstrip import MODES
+from ledstrip import MODES, mode_parameters_error
+from asynchttp import parse_url
 
 TAG = "API"
 
@@ -80,8 +81,12 @@ class DeviceAPI:
         return new_state
     
     def set_mode(self, mode, parameters=None):
-        """Set LED mode."""
+        """Set LED mode. Returns False for an unknown mode or unusable parameters."""
         if mode in MODES:
+            error = mode_parameters_error(mode, parameters)
+            if error:
+                Log.warn(TAG, f'Rejected mode {mode}: {error}')
+                return False
             if parameters:
                 self.led_strip.set_next_mode(mode, parameters)
             else:
@@ -149,11 +154,19 @@ class DeviceAPI:
                     return False, 'Invalid default_mode'
                 cfg['device']['default_mode'] = dev['default_mode']
             if 'mode_parameters' in dev:
+                error = mode_parameters_error('Colour', dev['mode_parameters'])
+                if error or dev['mode_parameters'] is None:
+                    return False, error or 'Mode parameters must be an object'
                 cfg['device']['mode_parameters'] = dev['mode_parameters']
             if 'default_state' in dev:
                 cfg['device']['default_state'] = bool(dev['default_state'])
             if 'cheerlights_url' in dev:
-                cfg['device']['cheerlights_url'] = str(dev['cheerlights_url'])
+                url = str(dev['cheerlights_url']).strip()
+                try:
+                    parse_url(url)
+                except ValueError:
+                    return False, 'cheerlights_url must be an http:// or https:// URL'
+                cfg['device']['cheerlights_url'] = url
             if 'cheerlights_update_interval' in dev:
                 v = int(dev['cheerlights_update_interval'])
                 if v < 10:
