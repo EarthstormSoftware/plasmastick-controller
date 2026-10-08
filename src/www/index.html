@@ -31,7 +31,10 @@ nav label:hover{color:#555}
 .modes{display:flex;gap:6px;margin-bottom:12px}
 .modes button{flex:1;padding:9px 6px;border:1.5px solid #ddd;border-radius:7px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#555}
 .modes button[aria-pressed=true]{border-color:#667eea;background:#667eea;color:#fff}
-.crow label{font-size:13px;color:#555}
+.crow label{font-size:13px;color:#555;flex:1}
+.reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid #ddd;border-radius:7px;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer}
+.reset:disabled{opacity:.5;cursor:default}
+.swatch{width:14px;height:14px;border-radius:3px;border:1px solid #bbb;background:#fff}
 /* Power switch: a plain Toggle button without script, a switch with it */
 .power{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .power .sec{margin:0}
@@ -97,8 +100,12 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
     <div class="crow" id="colour_row">
       <input type="color" name="colour" id="colour" value="#ffffff">
       <label for="colour" id="colour_text">Colour</label>
+      <button type="submit" form="default_form" class="reset" id="default_btn" title="Return to the default colour">
+        <span class="swatch" id="default_swatch"></span>Default
+      </button>
     </div>
   </form>
+  <form id="default_form" action="/api/mode" method="post"><input type="hidden" name="mode" value="Colour"></form>
   <p class="msg" id="msg" role="status" aria-live="polite"></p>
 </div>
 
@@ -264,6 +271,7 @@ document.documentElement.className = 'js';
 function el(id) { return document.getElementById(id); }
 function sel(id, v) { el(id).value = String(v); }
 var info = null;
+var defaultColour = null;  // from /api/config
 var colourSending = false, pendingColour = null;
 var modeButtons = document.querySelectorAll('.modes button');
 
@@ -310,6 +318,7 @@ function render(i) {
     el('colour').value = i.colour.toLowerCase();
   }
   el('colour_text').textContent = i.mode === 'CheerLights' && i.colour ? 'CheerLights: ' + i.colour : 'Pick a colour';
+  showDefault();
 
   var health = el('health'), problems = [];
   health.textContent = '';
@@ -329,6 +338,14 @@ function render(i) {
     problems.push('MQTT is not connected' + (i.mqtt.error ? ': ' + i.mqtt.error : '.'));
   }
   showAlert(problems.join(' '));
+}
+
+// The Default button is disabled when the default colour is already showing.
+function showDefault() {
+  if (!defaultColour) return;
+  el('default_swatch').style.backgroundColor = defaultColour;
+  var current = info && info.mode === 'Colour' && info.colour;
+  el('default_btn').disabled = !!current && current.toLowerCase() === defaultColour.toLowerCase();
 }
 
 function showAlert(text) {
@@ -382,6 +399,14 @@ function sendColour() {
       else setTimeout(refresh, 300);
     });
 }
+el('default_btn').addEventListener('click', function (e) {
+  e.preventDefault();
+  pendingColour = null;
+  if (defaultColour) el('colour').value = defaultColour.toLowerCase();
+  el('default_btn').disabled = true;
+  act('/api/mode', { mode: 'Colour' });  // no colour: the device uses its configured default
+});
+
 el('colour').addEventListener('input', function () {
   say('');
   pendingColour = el('colour').value;
@@ -398,6 +423,8 @@ fetch('/api/config')
     var dev = cfg.device, wl = cfg.wlan, mq = cfg.mqtt;
     var colour = (dev.mode_parameters && dev.mode_parameters.Colour) || '#ffffff';
     el('default_colour').value = colour.toLowerCase();
+    defaultColour = colour;
+    showDefault();
     el('default_colour_text').textContent = colour;
     el('device_led_count').value = dev.device_led_count;
     sel('device_led_rgbw', !!dev.device_led_rgbw);
