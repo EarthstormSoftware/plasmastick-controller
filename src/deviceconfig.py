@@ -15,7 +15,8 @@ _DEFAULT_CONFIG = {
         "default_mode": "Colour",
         "mode_parameters": {"Colour": "#ffffff"},
         "default_state": False,
-        "cheerlights_url": "https://api.thingspeak.com/channels/1417/field/2/last.json",
+        # http, as in config.example.json: a TLS handshake holds the CPU for about a second.
+        "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
         "cheerlights_update_interval": 60,
     },
     "wlan": {

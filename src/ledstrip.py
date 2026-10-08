@@ -1,7 +1,7 @@
 import time
 import plasma
 import uasyncio as asyncio
-import urequests
+import asynchttp
 from log import Log
 
 TAG = "LEDS"
@@ -112,14 +112,14 @@ class LedStrip:
             self.led_strip.set_rgb(i, r, g, b)
     
     async def _fetch_cheerlights(self):
-        """Fetch CheerLights color asynchronously to avoid blocking the event loop."""
-        response = None
+        """Fetch the CheerLights colour without blocking the event loop."""
+        # Counts as an update even if it fails, so a failing URL is retried at
+        # the normal interval rather than on every controller loop.
+        self.cheerlights_last_update = time.time()
         try:
             Log.debug(TAG, 'Requesting URL: {}'.format(self.device_config.cheerlights_url))
-            response = urequests.get(self.device_config.cheerlights_url, timeout=5)
-            payload = response.json()
+            payload = await asynchttp.get_json(self.device_config.cheerlights_url)
             hex_colour = payload.get('field2', '#ffffff')
-            self.cheerlights_last_update = time.time()
             # The strip may have been switched off or changed mode while waiting.
             if not (self.current_state and self.current_mode == 'CheerLights'):
                 return
@@ -128,13 +128,7 @@ class LedStrip:
                 self.led_strip.set_rgb(i, r, g, b)
             Log.info(TAG, 'LEDs set to {}'.format(hex_colour))
         except Exception as e:
-            Log.warn(TAG, 'CheerLights update failed: {}'.format(e))
-        finally:
-            try:
-                if response is not None:
-                    response.close()
-            except:
-                pass
+            Log.warn(TAG, 'CheerLights update failed: {!r}'.format(e))
 
     async def controller(self):        
         while True:
