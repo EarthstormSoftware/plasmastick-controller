@@ -2,7 +2,8 @@
 
 With --reset the board is interrupted and soft-reset first, so the whole boot is
 captured. The log is saved to --out, and a summary of boot milestones, warnings,
-errors and tracebacks is printed at the end as SUMMARY/MILESTONE/PROBLEM lines.
+errors and tracebacks is printed at the end as SUMMARY/MILESTONE/HEAP/PROBLEM lines
+(HEAP gives the lowest and latest free-heap figures the firmware logged).
 
     py scripts/device_log.py --reset --until-ready --seconds 90
     py scripts/device_log.py --seconds 300 --out build/soak.log
@@ -39,6 +40,8 @@ PROBLEMS = [
     ('traceback', r'^Traceback'),
     ('memory', r'MemoryError'),
 ]
+
+HEAP = r'\[MAIN\] :: Heap free: (\d+) bytes'
 
 
 def find_pico_port():
@@ -87,6 +90,10 @@ def main():
     found = {}
     problems = []
     lines = []
+    heap = []
+    # With --reset, the Ctrl-C that stops the running program prints a
+    # KeyboardInterrupt traceback. Only count problems once the board reboots.
+    booted = not args.reset
     with ser:
         if args.reset:
             soft_reset(ser)
@@ -104,8 +111,13 @@ def main():
                     m = re.search(pattern, line)
                     if m:
                         found[name] = m.group(1) if m.groups() else ''
+            if 'soft reboot' in line:
+                booted = True
+            m = re.search(HEAP, line)
+            if m:
+                heap.append(int(m.group(1)))
             for name, pattern in PROBLEMS:
-                if re.search(pattern, line):
+                if booted and re.search(pattern, line):
                     problems.append((name, line))
             if args.until_ready and is_ready(found):
                 break
@@ -121,6 +133,8 @@ def main():
             print(f'MILESTONE {name} ok {found[name]}'.rstrip())
         else:
             print(f'MILESTONE {name} missing')
+    if heap:
+        print(f'HEAP samples={len(heap)} min={min(heap)} last={heap[-1]}')
     for name, line in problems:
         print(f'PROBLEM {name} {line}')
 

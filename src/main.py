@@ -159,7 +159,15 @@ async def down(client):
         client.down.clear()        
         Log.warn(TAG,'WiFi or broker is down.')
 
-async def main(client):        
+HEAP_LOG_INTERVAL_S = 300
+
+async def heap_monitor():
+    # Logs free heap now and then, so long runs show leaks or fragmentation growth.
+    while True:
+        Log.info(TAG, f'Heap free: {gc.mem_free()} bytes, allocated: {gc.mem_alloc()} bytes')
+        await asyncio.sleep(HEAP_LOG_INTERVAL_S)
+
+async def main(client):
     global web_ui, http_server
 
     # Start long-running controllers once event loop is active.
@@ -194,6 +202,7 @@ async def main(client):
             traceback.print_exc()
     
     asyncio.create_task(http_server_task())
+    asyncio.create_task(heap_monitor())
 
     if client is None:
         Log.warn(TAG,'MQTT is disabled (no broker configured or mqtt.enabled=false). Running HTTP/API only.')

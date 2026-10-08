@@ -1,3 +1,4 @@
+import gc
 import ujson
 import machine
 from log import Log
@@ -53,12 +54,15 @@ class DeviceAPI:
     
     def get_device_info(self):
         """Return device info as dict."""
+        gc.collect()  # so mem_free is live data, not live data plus garbage
         return {
             'name': self.device_name,
             'device_id': self.device_config.device_name,
             'state': self.led_strip.current_state,
             'mode': self.led_strip.current_mode,
             'led_count': self.device_config.device_led_count,
+            'mem_free': gc.mem_free(),
+            'mem_alloc': gc.mem_alloc(),
         }
     
     def power_on(self):
