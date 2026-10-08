@@ -7,7 +7,7 @@
 - Preserve existing module boundaries and naming conventions already used across root Python files.
 
 ## Architecture
-- Layout: device code is in `src/` (deployed to the device root), vendored libraries are in `src/lib/` (deployed to `/lib`), host-side tooling is in `scripts/` and `tools/`.
+- Layout: device code is in `src/` (deployed to the device root), vendored libraries are in `src/lib/` (deployed to `/lib`), host-side tooling is in `scripts/`, host-side tests in `tests/`.
 - Entry point is `main.py`, which wires core controllers and starts asynchronous tasks.
 - Connectivity ownership: `wlan.py` manages WLAN lifecycle and connection state transitions.
 - MQTT ownership: `main.py` wraps `mqtt_as.MQTTClient` and only connects/reconnects when WLAN is healthy.
@@ -21,7 +21,6 @@
 ## Build And Test
 - There is no local build system. `tests/` has host-side pytest tests for pure logic (`py -m pytest`; `tests/conftest.py` stubs `machine`, `network`, `plasma` and the u-modules). Add tests there for new parsing/validation logic. Hardware and network behaviour is still verified by smoke testing on device.
 - Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles everything except `main.py`, including `src/lib/`, to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed.
-- `tools/diagnostics/` holds on-device diagnostic scripts (run with `mpremote run`), not automated tests.
 - For mqtt_as upgrades and rollback/testing commands, follow `docs/mqtt_as_maintenance.md`.
 - Minimum validation after behavior changes:
   - Device boots and main tasks start.

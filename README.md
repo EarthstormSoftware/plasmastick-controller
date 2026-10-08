@@ -109,7 +109,6 @@ on the next connection.
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
 | `tests/` | Host-side pytest tests (`py -m pytest`); `conftest.py` stands in for the MicroPython-only modules |
 | `scripts/` | `deploy.ps1`; `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
-| `tools/diagnostics/` | Scripts for checking the HTTP server on a device (`mpremote run tools/diagnostics/<script>.py`) |
 | `docs/` | Maintenance notes |
 
 ## Known Restrictions
