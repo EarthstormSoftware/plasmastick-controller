@@ -8,6 +8,7 @@ from log import Log
 from wificrypto import encrypt_password
 from deviceidentity import generate_default_device_name, sanitize_device_name
 from deviceconfig import DEVICE_NAME_FILE
+from htmlutil import escape
 from captivedns import CaptiveDNS
 
 TAG = "PROV"
@@ -126,9 +127,11 @@ class Provisioning:
         if device_name is None:
             device_name = self.device_name or generate_default_device_name()
 
-        network_options = ''.join(f'<option value="{n}">' for n in networks)
-
-        error_html = f'<p class="error">{error}</p>' if error else ''
+        # Network names come from anyone in radio range, so everything put
+        # into the page is escaped.
+        network_options = ''.join(f'<option value="{escape(n)}">' for n in networks)
+        error_html = f'<p class="error">{escape(error)}</p>' if error else ''
+        device_name = escape(device_name)
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -250,7 +253,7 @@ class Provisioning:
                     """<html><body><h1>Success!</h1>
 <p>WiFi credentials saved. Device will restart and connect to your network.</p>
 <p>Once connected, you can find it at <strong>{device_name}.local</strong> (if mDNS is available).</p>
-</body></html>""".format(device_name=device_name)
+</body></html>""".format(device_name=escape(device_name))
                 )
             except Exception as e:
                 Log.error(TAG, f'Provisioning request failed: {e}')

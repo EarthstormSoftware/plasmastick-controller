@@ -1,6 +1,7 @@
 import uasyncio as asyncio
 from microdot import Microdot, Response
 from log import Log
+from htmlutil import escape
 
 TAG = "HTTP"
 
@@ -186,7 +187,7 @@ class HTTPServer:
                 if success:
                     asyncio.create_task(http_server._restart_soon())
                     return '<html><head><meta http-equiv="refresh" content="8;url=/"></head><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Saving&hellip;</h2><p>Device restarting. Page reloads in 8s.</p></body></html>', 200, {'Content-Type': 'text/html; charset=utf-8'}
-                return f'<html><body><p>Error: {error}</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
+                return f'<html><body><p>Error: {escape(error)}</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
             except Exception as e:
                 Log.error(TAG, f'Config form failed: {e}')
                 return '<html><body><p>Error: request failed.</p><a href="/">Back</a></body></html>', 500, {'Content-Type': 'text/html; charset=utf-8'}
