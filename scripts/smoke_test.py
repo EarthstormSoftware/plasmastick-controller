@@ -11,13 +11,20 @@ the PLASMASTICK_MQTT_PASSWORD environment variable, or --mqtt-password.
     py scripts/smoke_test.py --host PicoLights-A1B2C3.local
     py scripts/smoke_test.py --host 192.168.1.50 --soak 300
 
+During a soak the device is also pinged every second. A failed or slow poll while
+pings were being lost is reported as a network blip (Wi-Fi or access point) and
+doesn't fail the soak; one while pings got through means the firmware stalled, and does.
+
 Prints PASS/FAIL/SKIP lines; exits 1 if anything failed, 2 if the device can't be reached.
 """
 import argparse
 import json
 import os
+import re
 import socket
+import subprocess
 import sys
+import threading
 import time
 import base64
 import urllib.error
@@ -235,27 +242,68 @@ def test_mqtt(dev, config, args):
         client.disconnect()
 
 
-def soak(dev, seconds, max_latency):
-    failures, latencies = 0, []
+class Pinger(threading.Thread):
+    """Pings ip once a second, noting the times (time.monotonic) of lost pings."""
+
+    def __init__(self, ip):
+        super().__init__(daemon=True)
+        count, wait = ('-n', '-w') if sys.platform == 'win32' else ('-c', '-W')
+        self.command = ['ping', count, '1', wait, '1000' if sys.platform == 'win32' else '1', ip]
+        self.lost = []
+        self.sent = 0
+        self.stopping = threading.Event()
+
+    def run(self):
+        while not self.stopping.is_set():
+            started = time.monotonic()
+            # Windows ping exits 0 for "Destination host unreachable", so look for a reply time too
+            # ("time=12ms" or "time<1ms"; "Request timed out" doesn't match).
+            done = subprocess.run(self.command, capture_output=True, text=True)
+            self.sent += 1
+            if done.returncode != 0 or not re.search(r'time[=<]', done.stdout):
+                self.lost.append(started)
+            self.stopping.wait(max(0, 1 - (time.monotonic() - started)))
+
+    def lost_between(self, start, end, margin=2):
+        return any(start - margin <= t <= end + margin for t in self.lost)
+
+
+def soak(dev, seconds, max_latency, ip=None):
+    """Polls /api/info every 5 s. With ip, pings alongside and lets network blips pass."""
+    pinger = Pinger(ip) if ip else None
+    if pinger:
+        pinger.start()
+    bad, latencies = [], []  # bad: (start, end, stamp, description)
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        # Each failed or slow poll is printed with the time, to match against the device log.
         stamp = time.strftime('%H:%M:%S')
+        start = time.monotonic()
         try:
             status, _, _, elapsed = dev.request('GET', '/api/info')
             latencies.append(elapsed)
             if status != 200:
-                failures += 1
-                print(f'SOAK_FAIL {stamp} HTTP {status}', flush=True)
+                bad.append((start, time.monotonic(), stamp, f'HTTP {status}'))
             elif elapsed > max_latency:
-                print(f'SOAK_SLOW {stamp} {elapsed * 1000:.0f} ms', flush=True)
+                bad.append((start, time.monotonic(), stamp, f'{elapsed * 1000:.0f} ms'))
         except OSError as e:
-            failures += 1
-            print(f'SOAK_FAIL {stamp} {e!r}', flush=True)
+            bad.append((start, time.monotonic(), stamp, repr(e)))
         time.sleep(5)
+    if pinger:
+        pinger.stopping.set()
+        pinger.join(5)
+        time.sleep(2.5)  # so a blip at the very end can still be matched
+    stalls = 0
+    for start, end, stamp, description in bad:
+        if pinger and pinger.lost_between(start, end):
+            print(f'SOAK_NETWORK {stamp} {description} (pings lost too: Wi-Fi or access point)', flush=True)
+        else:
+            stalls += 1
+            print(f'SOAK_STALL {stamp} {description}', flush=True)
     worst = max(latencies) if latencies else 0
-    check('soak', failures == 0 and worst <= max_latency,
-          f'{len(latencies)} polls, {failures} failed, worst {worst * 1000:.0f} ms, limit {max_latency * 1000:.0f} ms')
+    detail = f'{len(latencies)} polls, {stalls} stalls, {len(bad) - stalls} network blips, worst {worst * 1000:.0f} ms'
+    if pinger:
+        detail += f', {len(pinger.lost)}/{pinger.sent} pings lost'
+    check('soak', stalls == 0, detail)
 
 
 def main():
@@ -270,6 +318,8 @@ def main():
                         help='Web password, if one is set (default: PLASMASTICK_WEB_PASSWORD)')
     parser.add_argument('--soak', type=float, default=0, help='Poll /api/info for this many seconds afterwards')
     parser.add_argument('--max-latency', type=float, default=2.0, help='Soak latency limit in seconds (default 2)')
+    parser.add_argument('--no-ping', action='store_true',
+                        help="Don't ping during the soak: every failed or slow poll then fails it")
     args = parser.parse_args()
 
     try:
@@ -306,7 +356,7 @@ def main():
             print(f'RESTORE_FAILED {e}')
 
     if args.soak:
-        soak(dev, args.soak, args.max_latency)
+        soak(dev, args.soak, args.max_latency, None if args.no_ping else ip)
 
     failed = results.count('FAIL')
     print(f'RESULT {"FAIL" if failed else "PASS"} passed={results.count("PASS")} failed={failed} '

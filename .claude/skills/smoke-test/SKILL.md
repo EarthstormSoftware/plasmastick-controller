@@ -79,9 +79,13 @@ py scripts/device_log.py --seconds <seconds+30> --quiet --out build/soak.log
 py scripts/smoke_test.py --host <address> --skip-mqtt --soak <seconds>
 ```
 
-The `soak` result fails on any failed poll or response slower than 2 s, which points to a blocked event loop.
-Also check `build/soak.log` for tracebacks, `MemoryError`, `WLAN disconnected`, `WiFi or broker is down`, and any
-unexpected reboot (`Plasma Stick starting` appearing again).
+The soak pings the device every second alongside the polls. A failed or slow (over 2 s) poll is printed as
+`SOAK_NETWORK` when pings were lost at the same time (a Wi-Fi or access point blip, which doesn't fail the soak),
+or as `SOAK_STALL` when pings got through, which points to stalled firmware and fails it. Report network blips
+as a finding, not a failure. `--no-ping` makes every failed or slow poll fail.
+Also check `build/soak.log` for tracebacks, `MemoryError`, `Event loop was blocked`, `WLAN disconnected`,
+`WiFi or broker is down`, and any unexpected reboot (`Plasma Stick starting` appearing again). The heap lines
+are collected first, so a steady fall in `Heap free` means a real leak.
 
 ## 7. Report
 
