@@ -222,7 +222,7 @@ class HTTPServer:
                 return {'success': False, 'error': 'Reset failed: ' + str(e)}, 500
             asyncio.create_task(http_server._restart_soon())
             if _is_form(request):
-                text = ('Join the PlasmaStick-SETUP Wi-Fi network to set it up again.' if wifi
+                text = ('Join the PlasmaStick-SETUP Wi-Fi network, then open http://192.168.4.1 to set it up again.' if wifi
                         else 'The device is restarting with default settings.')
                 return f'<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Reset</h2><p>{text}</p></body></html>', 200, {'Content-Type': 'text/html; charset=utf-8'}
             return {'success': True, 'setup_mode': wifi}

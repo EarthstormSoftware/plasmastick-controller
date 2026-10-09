@@ -9,9 +9,11 @@ API, MQTT, or the button on the board.
 - Lighting modes: a single **Colour**, **Rainbows**, and **CheerLights** (follows the global
   [CheerLights](https://cheerlights.com) colour).
 - Wi-Fi setup without editing files: on first boot the device opens a `PlasmaStick-SETUP` access point for 10
-  minutes. Join it, then open any `http://` address (for example `http://example.com`) and you're redirected to the
-  setup page at `http://192.168.4.1`. Some phones also pop up a "Sign in to network" prompt, but don't rely on it.
-  The Wi-Fi password is stored encrypted with a key derived from the device.
+  minutes. Join it, then open **`http://192.168.4.1`** in a browser. Pick your network from the list (or type the
+  name of a hidden one), enter its password and choose Save & Connect; the device restarts onto your network. Some
+  phones offer a "Sign in to network" prompt that opens the page for you, and other `http://` addresses may
+  redirect there too, but don't rely on either. The Wi-Fi password is stored encrypted with a key derived from the
+  device.
 - Getting back into setup mode (for a new router or a mistyped password): hold the button while powering on, or
   just wait. If Wi-Fi hasn't connected after 5 attempts since boot (about 2-3 minutes), the device restarts into
   setup mode by itself. Either way it keeps its saved settings until new ones are submitted, and if setup mode times
@@ -133,9 +135,13 @@ on the next connection.
 
 ## Known Restrictions
 
-- The HTTP API and web UI have no authentication; anyone on the same network can control the lights and change the
-  settings.
+- Without a web password (Network tab), anyone on the same network can control the lights and change the settings.
+  With one, it's sent unencrypted (plain HTTP), so it keeps out other people on the network rather than a
+  determined attacker. The web and MQTT passwords are stored in plain text in `config.json` on the device.
 - The setup access point is open (no password) while setup mode is running.
+- Phones don't reliably show a "Sign in to network" prompt for the setup access point. A Samsung phone on Android 16
+  checked the access point's DNS with made-up names and then never sent its connectivity check, so open
+  `http://192.168.4.1` yourself.
 
 ### Raising Issues
 

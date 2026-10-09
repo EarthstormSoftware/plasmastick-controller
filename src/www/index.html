@@ -222,12 +222,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
   </form>
 
   <div class="sec">Reset</div>
-  <p class="note">Both keep the LED count and type. Reset settings keeps the Wi-Fi network too; factory reset forgets it, and the device starts its PlasmaStick-SETUP hotspot to be set up again.</p>
+  <p class="note">Both keep the LED count and type. Reset settings keeps the Wi-Fi network too; factory reset forgets it, and the device starts its PlasmaStick-SETUP hotspot: join it, then open http://192.168.4.1 to set it up again.</p>
   <form class="reset-form" action="/api/reset" method="post" data-confirm="Reset all settings to their defaults? The device keeps its Wi-Fi network and restarts.">
     <label class="confirm nojs"><input type="checkbox" name="confirm" value="yes" required> Yes, reset settings</label>
     <button type="submit" class="btn-full danger">Reset settings</button>
   </form>
-  <form class="reset-form" action="/api/reset" method="post" data-confirm="Factory reset? This also forgets the Wi-Fi network: you'll need to join the PlasmaStick-SETUP hotspot to set the device up again." data-wifi="true">
+  <form class="reset-form" action="/api/reset" method="post" data-confirm="Factory reset? This also forgets the Wi-Fi network: you'll need to join the PlasmaStick-SETUP hotspot and open http://192.168.4.1 to set the device up again." data-wifi="true">
     <input type="hidden" name="wifi" value="true">
     <label class="confirm nojs"><input type="checkbox" name="confirm" value="yes" required> Yes, forget everything</label>
     <button type="submit" class="btn-full danger">Factory reset</button>
@@ -245,7 +245,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         <input type="text" id="ssid" aria-describedby="wifi_help" disabled>
       </div>
     </div>
-    <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its setup hotspot.</p>
+    <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its PlasmaStick-SETUP hotspot. Join it, then open http://192.168.4.1.</p>
     <div class="frow">
       <div class="field"><label for="connect_timeout">Connect Timeout (s)</label>
         <input type="number" required name="connect_timeout" id="connect_timeout" min="5">
@@ -627,7 +627,7 @@ document.querySelectorAll('form.reset-form').forEach(function (f) {
       .then(function () {
         if (wifi) {
           restarting = true;
-          msg.textContent = 'Reset. The device is starting setup mode: join the PlasmaStick-SETUP Wi-Fi network to set it up again.';
+          msg.textContent = 'Reset. The device is starting setup mode: join the PlasmaStick-SETUP Wi-Fi network, then open http://192.168.4.1 to set it up again.';
         } else {
           msg.textContent = 'Reset. Restarting the device\u2026';
           waitForRestart(msg);

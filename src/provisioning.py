@@ -86,7 +86,7 @@ class Provisioning:
         self.ap.active(True)
         # security=0 means open network (no authentication)
         self.ap.config(ssid='PlasmaStick-SETUP', security=0)
-        Log.info(TAG, 'AP active. Join "PlasmaStick-SETUP", then open any http:// address (or http://192.168.4.1)')
+        Log.info(TAG, 'AP active. Join "PlasmaStick-SETUP", then open http://192.168.4.1')
 
     def _scan_networks(self):
         """Scan for available WiFi networks using STA interface."""
