@@ -1,7 +1,9 @@
 """Smoke-test a running device over HTTP and MQTT (host-side, not deployed).
 
 Checks the HTTP API and web UI, then publishes StateChange/ModeChange/BrightnessChange control
-messages from this PC and confirms the device applied them through /api/info.
+messages from this PC and confirms the device applied them through /api/info. It also checks
+what the device publishes: the retained status and state topics and, with Home Assistant
+discovery on, the discovery config, the HA state and an HA command.
 The device's original power state and mode are restored at the end.
 
 The broker address, user and device name come from the device's /api/config.
@@ -181,9 +183,16 @@ def test_mqtt(dev, config, args):
 
     broker = args.broker or mqtt['broker_address']
     device_name = config.get('device', {}).get('device_name')
-    topic = f'/home/device/{device_name}/control'
+    base = f'/home/device/{device_name}'
+    topic = base + '/control'
+    ha = bool(mqtt.get('ha_discovery'))
+    watched = {'status': base + '/status', 'state': base + '/state'}
+    if ha:
+        watched.update({'ha_state': base + '/ha/state', 'ha_config': f'homeassistant/light/{device_name}/config'})
+    seen = {}  # topic -> latest payload text
 
     client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id=f'smoke-test-{os.getpid()}')
+    client.on_message = lambda _c, _u, m: seen.__setitem__(m.topic, m.payload.decode('utf-8', 'replace'))
     if mqtt.get('user'):
         client.username_pw_set(mqtt['user'], load_mqtt_password(args.mqtt_password))
     try:
@@ -199,6 +208,34 @@ def test_mqtt(dev, config, args):
         if not check('mqtt.connect', client.is_connected(), f'{broker}:{args.mqtt_port}, topic {topic}'):
             report('FAIL', 'mqtt', 'broker refused the connection (check user/password)')
             return
+        client.subscribe([(t, 0) for t in watched.values()])
+
+        def wait_json(name, test, timeout=5.0):
+            """Wait for the watched topic's latest JSON payload to pass test. Returns (ok, payload)."""
+            deadline = time.monotonic() + timeout
+            payload = None
+            while time.monotonic() < deadline:
+                try:
+                    payload = json.loads(seen.get(watched[name], ''))
+                    if test(payload):
+                        return True, payload
+                except ValueError:
+                    pass
+                time.sleep(0.2)
+            return False, payload
+
+        # Retained, so these arrive as soon as we subscribe.
+        deadline = time.monotonic() + 5
+        while watched['status'] not in seen and time.monotonic() < deadline:
+            time.sleep(0.1)
+        status = seen.get(watched['status'])
+        check('mqtt.status_online', status == 'online', f'status={status}')
+        if ha:
+            ok, discovery = wait_json('ha_config', lambda c: c.get('unique_id') == f'{device_name}_light')
+            check('mqtt.ha_discovery', ok and discovery.get('brightness') is True and discovery.get('brightness_scale') == 100,
+                  f'brightness={discovery and discovery.get("brightness")}, scale={discovery and discovery.get("brightness_scale")}')
+        else:
+            report('SKIP', 'mqtt.ha_discovery', 'Home Assistant discovery is off on the device')
 
         def publish(payload):
             text = payload if isinstance(payload, str) else json.dumps(payload)
@@ -221,6 +258,18 @@ def test_mqtt(dev, config, args):
         publish({'MessageType': 'BrightnessChange', 'Parameters': {'Brightness': 60}})
         ok, value = dev.wait_for('brightness', 60)
         check('mqtt.brightness', ok, f'brightness={value}')
+
+        # The device publishes what it now shows.
+        ok, state = wait_json('state', lambda p: p.get('Mode') == 'Rainbows' and p.get('State') is True and p.get('Brightness') == 60)
+        check('mqtt.state_published', ok, f'state={state}')
+        if ha:
+            ok, ha_state = wait_json('ha_state', lambda p: p.get('state') == 'ON' and p.get('effect') == 'Rainbows' and p.get('brightness') == 60)
+            check('mqtt.ha_state', ok, f'ha/state={ha_state}')
+            client.publish(base + '/ha/set', json.dumps({'state': 'ON', 'brightness': 45}), qos=1).wait_for_publish(5)
+            ok, value = dev.wait_for('brightness', 45)
+            check('mqtt.ha_command', ok, f'brightness={value}')
+            publish({'MessageType': 'BrightnessChange', 'Parameters': {'Brightness': 60}})
+            dev.wait_for('brightness', 60)
 
         # Bad messages must be ignored without changing anything or breaking the handler.
         publish({'MessageType': 'ModeChange', 'Parameters': {'Mode': 'NoSuchMode'}})
