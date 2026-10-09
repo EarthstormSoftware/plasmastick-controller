@@ -61,7 +61,9 @@ class CaptiveDNS:
 
         # Walk the question name's labels to find the end of the question.
         pos = 12
+        labels = []
         while pos < len(data) and data[pos] != 0:
+            labels.append(bytes(data[pos + 1:pos + 1 + data[pos]]).decode('ascii', 'replace'))
             pos += data[pos] + 1
         end = pos + 5  # zero byte + QTYPE + QCLASS
         if end > len(data):
@@ -70,6 +72,9 @@ class CaptiveDNS:
         qtype = (data[pos + 1] << 8) | data[pos + 2]
         is_a_query = qtype == 1
         self.query_count += 1
+        # Setup mode is short, so every lookup is logged: it shows what a phone
+        # checks before deciding whether to offer its sign-in screen.
+        Log.info(TAG, f'Query {".".join(labels)} type {qtype}')
 
         # ID, flags (response, recursion desired + available, no error),
         # QDCOUNT 1, ANCOUNT, NSCOUNT 0, ARCOUNT 0.

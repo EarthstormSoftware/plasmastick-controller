@@ -125,8 +125,8 @@ class Provisioning:
         self.ap.active(False)
         Log.info(TAG, 'AP mode stopped.')
     
-    def _get_html_form(self, networks=None, error=None, device_name=None):
-        """Return simple HTML form for provisioning."""
+    def _get_html_form(self, networks=None, error=None, device_name=None, ssid=None):
+        """Return simple HTML form for provisioning. ssid is preselected (after an error)."""
         if networks is None:
             networks = []
         if device_name is None:
@@ -134,7 +134,12 @@ class Provisioning:
 
         # Network names come from anyone in radio range, so everything put
         # into the page is escaped.
-        network_options = ''.join(f'<option value="{escape(n)}">' for n in networks)
+        # A real drop-down: a <datalist> only suggests names while typing, and
+        # Android browsers often show nothing at all. Strongest network first.
+        network_options = ''.join(
+            f'<option value="{escape(n)}"{" selected" if n == ssid else ""}>{escape(n)}</option>' for n in networks
+        ) or '<option value="">No networks found</option>'
+        typed_ssid = escape(ssid) if ssid and ssid not in networks else ''
         error_html = f'<p class="error">{escape(error)}</p>' if error else ''
         device_name = escape(device_name)
 
@@ -146,7 +151,7 @@ class Provisioning:
     <style>
         body {{ font-family: Arial; margin: 20px; max-width: 400px; }}
         label {{ display: block; margin-top: 12px; font-weight: bold; }}
-        input {{ padding: 8px; margin-top: 4px; width: 100%; box-sizing: border-box; }}
+        input, select {{ padding: 8px; margin-top: 4px; width: 100%; box-sizing: border-box; font-size: 16px; }}
         button {{ margin-top: 16px; padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; width: 100%; font-size: 16px; }}
         button:hover {{ background: #0056b3; }}
         .scan-btn {{ background: #6c757d; margin-top: 8px; }}
@@ -162,10 +167,11 @@ class Provisioning:
         <label for="device_name">Device Name:</label>
         <input type="text" id="device_name" name="device_name" value="{device_name}" required placeholder="PicoLights-ABC123">
         <p class="hint">Used for MQTT client id and mDNS hostname (for example: {device_name}.local).</p>
-        <label for="ssid">WiFi Network (SSID):</label>
-        <input type="text" id="ssid" name="ssid" list="networks" autocomplete="off" required placeholder="Select or type network name">
-        <datalist id="networks">{network_options}</datalist>
+        <label for="ssid">WiFi Network:</label>
+        <select id="ssid" name="ssid">{network_options}</select>
         <p class="hint">{len(networks)} network(s) found. <a href="/scan">Rescan</a> if yours is not listed.</p>
+        <label for="ssid_other">Or type a network name:</label>
+        <input type="text" id="ssid_other" name="ssid_other" value="{typed_ssid}" autocomplete="off" autocapitalize="none" placeholder="For a hidden network; leave blank to use the list">
         <label for="password">WiFi Password:</label>
         <input type="password" id="password" name="password" required placeholder="Enter password">
         <button type="submit">Save &amp; Connect</button>
@@ -201,6 +207,12 @@ class Provisioning:
     def _create_app(self):
         app = Microdot()
 
+        @app.before_request
+        async def log_request(request):
+            # Shows which connectivity checks a phone sends (and what it does after).
+            Log.info(TAG, f'{request.method} {request.headers.get("Host", "")}{request.path} '
+                          f'({request.headers.get("User-Agent", "")[:40]})')
+
         @app.get('/')
         @app.get('/index.html')
         @app.get('/generate_204')
@@ -219,7 +231,8 @@ class Provisioning:
         async def provision(request):
             try:
                 form = request.form or {}
-                ssid = (form.get('ssid', '') or '').strip()
+                # A typed name wins over the list (it's there for hidden networks).
+                ssid = (form.get('ssid_other', '') or '').strip() or (form.get('ssid', '') or '').strip()
                 password = form.get('password', '') or ''
                 device_name = sanitize_device_name(form.get('device_name'))
 
@@ -227,7 +240,7 @@ class Provisioning:
                     return self._html_response(
                         self._get_html_form(
                             self.available_networks,
-                            error='SSID cannot be empty.',
+                            error='Choose a network from the list, or type its name.',
                             device_name=device_name,
                         ),
                         400,
@@ -248,6 +261,7 @@ class Provisioning:
                             self.available_networks,
                             error='Failed to save provisioning settings.',
                             device_name=device_name,
+                            ssid=ssid,
                         ),
                         500,
                     )
