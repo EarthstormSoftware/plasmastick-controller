@@ -129,7 +129,7 @@ def test_reset_settings_keeps_the_leds_and_wifi(device_dir):
     assert (device_dir / 'provisioning.json').exists()
     assert not (device_dir / 'device_name.json').exists()
     cfg = DeviceConfig.loadConfigFromFile()
-    assert cfg.default_brightness == 66 and cfg.web_password == '' and cfg.mqttconfig.broker_address == ''
+    assert cfg.default_brightness == 66 and cfg.web_password_hash == '' and cfg.mqttconfig.broker_address == ''
 
 
 def test_factory_reset_also_forgets_wifi(device_dir):

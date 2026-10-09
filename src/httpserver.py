@@ -4,6 +4,7 @@ from microdot import Microdot, Response
 from log import Log
 from htmlutil import escape
 from deviceconfig import DEFAULT_COLOUR
+from passwords import check_password
 
 TAG = "HTTP"
 
@@ -23,8 +24,9 @@ def origin_allowed(headers):
     return origin.split('://', 1)[-1].rstrip('/') == headers.get('Host', '')
 
 
-def password_ok(headers, password):
-    """True if HTTP Basic auth in headers carries password (any username)."""
+def password_ok(headers, password_hash):
+    """True if HTTP Basic auth in headers carries the password hashed in
+    password_hash (any username)."""
     auth = headers.get('Authorization', '')
     if not auth.startswith('Basic '):
         return False
@@ -32,7 +34,7 @@ def password_ok(headers, password):
         decoded = ubinascii.a2b_base64(auth[6:].strip()).decode('utf-8')
     except (ValueError, UnicodeError):
         return False
-    return decoded.partition(':')[2] == password
+    return check_password(decoded.partition(':')[2], password_hash)
 
 class HTTPServer:
     """Microdot-based async HTTP server for API and WebUI."""
@@ -59,11 +61,16 @@ class HTTPServer:
             if request.method == 'POST' and not origin_allowed(request.headers):
                 Log.warn(TAG, f'Refused cross-site POST {request.path} from {request.headers.get("Origin")}')
                 return 'Cross-site request refused', 403, {'Content-Type': 'text/plain; charset=utf-8'}
-            if api.web_password and not password_ok(request.headers, api.web_password):
-                return 'Password required', 401, {
-                    'Content-Type': 'text/plain; charset=utf-8',
-                    'WWW-Authenticate': 'Basic realm="PlasmaStick", charset="UTF-8"',
-                }
+            auth = request.headers.get('Authorization')
+            # A remembered login only counts when a header was sent at all.
+            if api.web_password_hash and not (auth and auth == api.accepted_auth):
+                if password_ok(request.headers, api.web_password_hash):
+                    api.accepted_auth = auth
+                else:
+                    return 'Password required', 401, {
+                        'Content-Type': 'text/plain; charset=utf-8',
+                        'WWW-Authenticate': 'Basic realm="PlasmaStick", charset="UTF-8"',
+                    }
 
         @app.get('/')
         @app.get('/ui')

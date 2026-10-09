@@ -110,4 +110,17 @@ class _Strip:
 
 
 _module('plasma', WS2812=_Strip, COLOR_ORDER_RGB=0, COLOR_ORDER_GRB=1)
-_module('ucryptolib', aes=None)  # wificrypto isn't exercised on the host
+class _FakeAES:
+    """Stands in for ucryptolib.aes: reversible, keyed by key and iv, but not AES.
+    Enough to test that passwords round-trip and aren't stored as typed."""
+
+    def __init__(self, key, mode, iv):
+        self._stream = hashlib.sha256(key + iv).digest()
+
+    def encrypt(self, data):
+        return bytes(b ^ self._stream[i % 32] for i, b in enumerate(data))
+
+    decrypt = encrypt
+
+
+_module('ucryptolib', aes=_FakeAES)

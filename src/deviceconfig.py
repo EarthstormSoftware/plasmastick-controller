@@ -2,7 +2,8 @@ from log import Log
 import os
 import ujson
 import machine
-from wificrypto import decrypt_password
+from wificrypto import encrypt_password, decrypt_password
+from passwords import hash_password
 from deviceidentity import sanitize_device_name
 
 TAG = "CFG"
@@ -36,15 +37,16 @@ _DEFAULT_CONFIG = {
         "enabled": True,
         "broker_address": "",
         "user": "",
-        "password": "",
+        # The password is kept encrypted, as password_iv and password_enc.
         "clean": True,
         "queue_len": 1,
         # Announce the device to Home Assistant over MQTT discovery.
         "ha_discovery": False,
     },
     "web": {
-        # Empty: the web UI and API are open to anyone on the network.
-        "password": "",
+        # A hash of the password (see passwords.py). Empty: the web UI and API
+        # are open to anyone on the network.
+        "password_hash": "",
     },
 }
 
@@ -70,6 +72,27 @@ def _redact_passwords(configdata):
             values = {k: ('***' if 'password' in k and v else v) for k, v in values.items()}
         safe[section] = values
     return safe
+
+
+def _secure_passwords(configdata):
+    """Convert plain-text web and MQTT passwords (from older versions, or a
+    hand-edited file) to their stored forms: the web password to a hash, the
+    MQTT password encrypted. Changes configdata; returns True if it changed."""
+    changed = False
+    web = configdata.get("web")
+    if isinstance(web, dict) and web.get("password"):
+        web["password_hash"] = hash_password(web.pop("password"))
+        changed = True
+    elif isinstance(web, dict) and "password" in web:
+        del web["password"]
+        changed = True
+    mqtt = configdata.get("mqtt")
+    if isinstance(mqtt, dict) and "password" in mqtt:
+        password = mqtt.pop("password")
+        if password:
+            mqtt["password_iv"], mqtt["password_enc"] = encrypt_password(password)
+        changed = True
+    return changed
 
 
 def _merge_with_defaults(configdata):
@@ -147,7 +170,7 @@ class DeviceConfig:
 
         self.wlanconfig = WlanConfig(configdata["wlan"])
         self.mqttconfig = MQTTConfig(self.device_name, configdata["mqtt"])
-        self.web_password = configdata["web"]["password"]
+        self.web_password_hash = configdata["web"].get("password_hash", "")
         Log.info(TAG, f'Using device name: {self.device_name}')
         
     def get_wlanconfig(self):
@@ -214,6 +237,13 @@ class DeviceConfig:
             Log.warn(TAG, 'Using built-in defaults.')
             configdata = {}
 
+        if _secure_passwords(configdata):
+            try:
+                DeviceConfig.saveConfigToFile(configdata)
+                Log.info(TAG, 'Stored passwords converted: web hashed, MQTT encrypted')
+            except OSError as e:
+                Log.warn(TAG, f'Could not save the converted passwords: {e}')
+
         return DeviceConfig(_merge_with_defaults(configdata))
     
     @staticmethod
@@ -223,8 +253,10 @@ class DeviceConfig:
         try:
             with open("config.json") as fp:
                 configdata = ujson.load(fp)
-            if configdata.get("web", {}).get("password"):
-                configdata["web"]["password"] = ""
+            web = configdata.get("web", {})
+            if web.get("password") or web.get("password_hash"):
+                web.pop("password", None)
+                web["password_hash"] = ""
                 DeviceConfig.saveConfigToFile(configdata)
                 Log.info(TAG, 'Web password cleared')
         except (OSError, ValueError, AttributeError) as e:
@@ -291,7 +323,14 @@ class MQTTConfig:
         self.client_id = device_name
         self.broker_address = mqttconfig.get("broker_address", "")
         self.user = mqttconfig.get("user", "")
-        self.password = mqttconfig.get("password", "")
+        if mqttconfig.get("password_enc"):
+            try:
+                self.password = decrypt_password(mqttconfig["password_iv"], mqttconfig["password_enc"])
+            except Exception as e:  # a different board, or a damaged file
+                Log.warn(TAG, f'Could not decrypt the MQTT password: {e!r}')
+                self.password = ""
+        else:
+            self.password = mqttconfig.get("password", "")
         self.clean = mqttconfig.get("clean", True)
         self.queue_len = mqttconfig.get("queue_len", 1)
         self.ha_discovery = bool(mqttconfig.get("ha_discovery", False))

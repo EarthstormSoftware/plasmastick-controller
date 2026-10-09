@@ -140,7 +140,12 @@ on the next connection.
 
 - Without a web password (Network tab), anyone on the same network can control the lights and change the settings.
   With one, it's sent unencrypted (plain HTTP), so it keeps out other people on the network rather than a
-  determined attacker. The web and MQTT passwords are stored in plain text in `config.json` on the device.
+  determined attacker.
+- Stored passwords: the web password is kept only as a salted, repeated SHA-256 hash, which can't be turned back
+  into the password. The MQTT and Wi-Fi passwords have to be sent on, so they're encrypted (AES-256) with a key
+  derived from the board's MAC address. That keeps them unreadable in a copy of `config.json` or
+  `provisioning.json`, but not from someone with the device itself, and the MAC address isn't secret. Plain-text
+  passwords from older versions are converted at the next boot. The MQTT connection itself is not encrypted.
 - The setup access point is open (no password) while setup mode is running.
 - Phones don't reliably show a "Sign in to network" prompt for the setup access point. A Samsung phone on Android 16
   checked the access point's DNS with made-up names and then never sent its connectivity check, so open

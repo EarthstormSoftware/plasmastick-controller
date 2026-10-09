@@ -5,6 +5,8 @@ import machine
 import network
 from log import Log
 from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, is_valid_brightness
+from passwords import hash_password
+from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
 from ledstrip import MODES, mode_parameters_error
 from asynchttp import parse_url
@@ -44,7 +46,10 @@ class DeviceAPI:
         self._config_cache = ujson.loads(ujson.dumps(device_config.configdata))
         self._running_settings = restart_settings(self._config_cache)
         # Checked on every HTTP request; updated as soon as a new one is saved.
-        self.web_password = device_config.web_password
+        self.web_password_hash = device_config.web_password_hash
+        # The last Authorization header that matched it, so a browser's repeated
+        # requests don't each pay for the hash. Cleared when the password changes.
+        self.accepted_auth = None
         self._started = time.time()
         # Set by main.py: the MQTT client (None when MQTT is off) and the last
         # connection error, so the web UI can show why MQTT isn't connected.
@@ -176,7 +181,7 @@ class DeviceAPI:
                 'ha_discovery': dc.mqttconfig.ha_discovery,
             },
             'web': {
-                'password_set': bool(self.web_password),
+                'password_set': bool(self.web_password_hash),
             },
         }
 
@@ -268,7 +273,8 @@ class DeviceAPI:
                 pw = str(mqtt['password'])
                 if len(pw) == 0:
                     return False, 'MQTT password cannot be empty'
-                cfg['mqtt']['password'] = pw
+                cfg['mqtt'].pop('password', None)
+                cfg['mqtt']['password_iv'], cfg['mqtt']['password_enc'] = encrypt_password(pw)
             if 'clean' in mqtt:
                 cfg['mqtt']['clean'] = bool(mqtt['clean'])
             if 'ha_discovery' in mqtt:
@@ -282,16 +288,19 @@ class DeviceAPI:
             # Web section: set a new password, or clear it.
             web_updates = updates.get('web', {})
             if web_updates.get('clear_password'):
-                cfg.setdefault('web', {})['password'] = ''
+                cfg['web'] = {'password_hash': ''}
             elif 'password' in web_updates:
                 pw = str(web_updates['password'])
                 if len(pw) < 4:
                     return False, 'Web password must be at least 4 characters'
-                cfg.setdefault('web', {})['password'] = pw
+                cfg['web'] = {'password_hash': hash_password(pw)}
 
             DeviceConfig.saveConfigToFile(cfg)
             self._config_cache = cfg
-            self.web_password = cfg.get('web', {}).get('password', '')
+            new_hash = cfg.get('web', {}).get('password_hash', '')
+            if new_hash != self.web_password_hash:
+                self.web_password_hash = new_hash
+                self.accepted_auth = None
             self._apply_live(cfg['device'])
             Log.info(TAG, 'Config saved.' + (' Restart to apply it all.' if self.restart_required() else ''))
             return True, None
