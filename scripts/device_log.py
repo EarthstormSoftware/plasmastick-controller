@@ -59,6 +59,17 @@ def soft_reset(ser):
     ser.write(b'\x04')
 
 
+def reopen(port, deadline):
+    """Wait for the serial port to come back after a board reset; None if it doesn't in time."""
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        try:
+            return serial.Serial(port, 115200, timeout=0.5)
+        except serial.SerialException:
+            pass
+    return None
+
+
 def is_ready(found):
     if 'setup_ap' in found:
         return True
@@ -94,12 +105,24 @@ def main():
     # With --reset, the Ctrl-C that stops the running program prints a
     # KeyboardInterrupt traceback. Only count problems once the board reboots.
     booted = not args.reset
-    with ser:
+    try:
         if args.reset:
             soft_reset(ser)
         deadline = time.monotonic() + args.seconds
         while time.monotonic() < deadline:
-            raw = ser.readline()
+            try:
+                raw = ser.readline()
+            except serial.SerialException:
+                # The board reset itself (completing setup does), so USB dropped
+                # out. Note it, and pick the log up again once the port is back.
+                ser.close()
+                lines.append('--- serial port lost (board reset); reconnecting ---')
+                ser = reopen(port, deadline)
+                if ser is None:
+                    break
+                lines.append('--- serial port back ---')
+                booted = True
+                continue
             if not raw:
                 continue
             line = raw.decode('utf-8', errors='replace').rstrip()
@@ -121,6 +144,9 @@ def main():
                     problems.append((name, line))
             if args.until_ready and is_ready(found):
                 break
+    finally:
+        if ser is not None:
+            ser.close()
 
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     with open(args.out, 'w', encoding='utf-8') as fp:
