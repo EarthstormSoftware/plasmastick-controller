@@ -26,7 +26,9 @@ API, MQTT, or the button on the board.
 - Optional MQTT control and state reporting, using [mqtt_as](https://github.com/peterhinch/micropython-mqtt), with
   optional Home Assistant discovery (see [MQTT](#mqtt)).
 - Button: a short press toggles the lights on and off; a long press returns to the default mode. Held at power-on,
-  it starts setup mode.
+  it starts setup mode. Wire a momentary switch across the middle two pins of the Qw/ST connector (3V3 and SDA,
+  which is GP4), so a press pulls GP4 high. For a switch to GND instead, change `BUTTON_PULL` and `PRESSED_LEVEL` in
+  `src/devicebutton.py`.
 
 ## Pre-requisites
 

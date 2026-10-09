@@ -5,6 +5,16 @@ from log import Log
 
 TAG = "BTN"
 BUTTON_PIN = "GP4"
+# The button is wired across the middle two pins of the Qw/ST connector, 3V3 and
+# SDA (GP4), so a press pulls GP4 high. The board has no pull resistors of its own
+# there, so the internal pull-down holds it low when released. For a button wired
+# to GND instead (pins 1 and 3), use Pin.PULL_UP and PRESSED_LEVEL = 0.
+BUTTON_PULL = machine.Pin.PULL_DOWN
+PRESSED_LEVEL = 1
+
+
+def _button_pin():
+    return machine.Pin(BUTTON_PIN, machine.Pin.IN, BUTTON_PULL)
 
 class DeviceButton:
 
@@ -12,10 +22,10 @@ class DeviceButton:
     def held_at_boot(hold_ms=1000):
         """True if the button is held down for hold_ms from boot.
         Called before the event loop starts, so it may block briefly."""
-        pin = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+        pin = _button_pin()
         start = time.ticks_ms()
         while time.ticks_diff(time.ticks_ms(), start) < hold_ms:
-            if pin.value() != 0:
+            if pin.value() != PRESSED_LEVEL:
                 return False
             time.sleep_ms(20)
         Log.info(TAG, 'Button held at power-on')
@@ -36,7 +46,7 @@ class DeviceButton:
         self.last_edge_ticks = 0
         self.last_raw_pressed = False
         
-        self.device_button = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+        self.device_button = _button_pin()
         self.device_config = device_config
         self.pico_led = pico_led
         self.led_strip = led_strip
@@ -91,8 +101,7 @@ class DeviceButton:
     async def controller(self):
         
         while True:            
-            # GPIO is configured with PULL_UP, so a pressed button reads low.
-            raw_pressed = self.device_button.value() == 0
+            raw_pressed = self.device_button.value() == PRESSED_LEVEL
             now_ticks = time.ticks_ms()
 
             # Debounce hardware chatter on edge transitions.

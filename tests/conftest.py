@@ -44,10 +44,10 @@ gc.mem_alloc = lambda: 76000
 
 
 class _Pin:
-    IN, OUT, PULL_UP = 0, 1, 2
+    IN, OUT, PULL_UP, PULL_DOWN = 0, 1, 2, 3
 
-    def __init__(self, *args, **kwargs):
-        self._value = 1  # pull-up: not pressed
+    def __init__(self, id=None, mode=None, pull=None, *args, **kwargs):
+        self._value = 0 if pull == _Pin.PULL_DOWN else 1  # the level the pull holds it at
 
     def value(self, v=None):
         if v is None:
