@@ -170,3 +170,24 @@ def test_saving_unchanged_boot_settings_needs_no_restart(api):
 def test_a_rename_needs_a_restart(api):
     assert api.set_device_name('kitchen')
     assert api.restart_required()
+
+
+def test_set_brightness(api):
+    assert api.set_brightness(30)
+    assert api.led_strip.brightness == 30
+    assert api.set_brightness(49.6)
+    assert api.led_strip.brightness == 50
+    assert api.set_brightness(0.6)
+    assert api.led_strip.brightness == 1
+    api.set_brightness(30)
+    for bad in (0, 0.4, 101, 100.6, -1.0, '50', True, None):
+        assert not api.set_brightness(bad)
+    assert api.led_strip.brightness == 30
+
+
+def test_default_brightness_is_saved_checked_and_applied_live(api):
+    assert api.save_config({'device': {'default_brightness': 0}}) == (False, 'default_brightness must be a whole number, 1-100')
+    assert api.save_config({'device': {'default_brightness': 25}}) == (True, None)
+    assert saved_config(api)['device']['default_brightness'] == 25
+    assert api.get_config()['device']['default_brightness'] == 25
+    assert not api.restart_required()

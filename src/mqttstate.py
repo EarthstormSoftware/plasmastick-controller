@@ -3,8 +3,8 @@
 Pure functions, so they can be tested off the device. main.py does the
 publishing and subscribing.
 
-  /home/device/<id>/control   commands (StateChange / ModeChange), unchanged
-  /home/device/<id>/state     retained: {"State", "Mode", "ModeParameters"}
+  /home/device/<id>/control   commands (StateChange / ModeChange / BrightnessChange)
+  /home/device/<id>/state     retained: {"State", "Mode", "ModeParameters", "Brightness"}
   /home/device/<id>/status    retained: "online", or "offline" (the will)
   /home/device/<id>/ha/state  retained: state in Home Assistant's JSON light schema
   /home/device/<id>/ha/set    Home Assistant JSON light commands
@@ -34,13 +34,15 @@ def _rgb(colour):
 
 
 def state_payload(report):
-    """report: {'state': bool, 'mode': str, 'colour': '#rrggbb' or None}."""
+    """report: {'state': bool, 'mode': str, 'colour': '#rrggbb' or None, 'brightness': 1-100}."""
     parameters = {'Colour': report['colour']} if report.get('colour') else {}
-    return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': parameters})
+    return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': parameters,
+                        'Brightness': report['brightness']})
 
 
 def ha_state_payload(report):
-    payload = {'state': 'ON' if report['state'] else 'OFF', 'color_mode': 'rgb', 'effect': report['mode']}
+    payload = {'state': 'ON' if report['state'] else 'OFF', 'color_mode': 'rgb', 'effect': report['mode'],
+               'brightness': report['brightness']}
     if report.get('colour'):
         payload['color'] = _rgb(report['colour'])
     return ujson.dumps(payload)
@@ -60,6 +62,8 @@ def ha_discovery_payload(client_id, modes, sw_version=None):
         'state_topic': t['ha_state'],
         'availability_topic': t['status'],
         'supported_color_modes': ['rgb'],
+        'brightness': True,
+        'brightness_scale': 100,  # percent, as the device uses
         'effect': True,
         'effect_list': list(modes),
         'device': device,
@@ -68,7 +72,7 @@ def ha_discovery_payload(client_id, modes, sw_version=None):
 
 def parse_ha_command(payload, modes):
     """Turn a Home Assistant JSON light command into actions, in order:
-    ('power', bool) and ('mode', name, parameters or None).
+    ('mode', name, parameters or None), ('brightness', 1-100) and ('power', bool).
     Raises ValueError for anything it can't use."""
     if not isinstance(payload, dict):
         raise ValueError('command must be a JSON object')
@@ -87,6 +91,11 @@ def parse_ha_command(payload, modes):
         if effect not in modes:
             raise ValueError('unknown effect')
         actions.append(('mode', effect, None))
+    brightness = payload.get('brightness')
+    if brightness is not None:
+        if isinstance(brightness, bool) or not isinstance(brightness, (int, float)) or not 0 <= brightness <= 100:
+            raise ValueError('brightness must be 0-100')
+        actions.append(('brightness', max(1, int(brightness + 0.5))))
     state = payload.get('state')
     if state is not None:
         if state not in ('ON', 'OFF'):

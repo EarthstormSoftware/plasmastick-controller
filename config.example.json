@@ -4,8 +4,9 @@
         "device_led_count": 49,
         "device_led_rgbw": false,
         "default_mode": "Colour",
-        "mode_parameters": {"Colour": "#FFFFFF"},
+        "mode_parameters": {"Colour": "#FFB46B"},
         "default_state": false,
+        "default_brightness": 66,
         "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
         "cheerlights_update_interval": 120,
         "log_level": 1

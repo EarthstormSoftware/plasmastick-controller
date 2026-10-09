@@ -61,6 +61,11 @@ nav label:hover{color:var(--text)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .msg{font-size:12px;color:var(--bad);min-height:16px;margin-top:4px}
 .msg.good{color:var(--ok)}
+/* Brightness slider; its Set button is only needed without script */
+.bright{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bright input[type=range]{flex:1;accent-color:var(--accent);height:28px}
+.bright output{font-size:13px;color:var(--text2);min-width:40px;text-align:right}
+.js .nojs{display:none}
 .note{font-size:12px;color:var(--muted);margin-bottom:8px}
 /* Sections */
 .sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
@@ -72,12 +77,17 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
 input:disabled{opacity:.7}
 [aria-invalid=true]{border-color:var(--bad)!important}
-input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input[type=url]:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+input[type=range]:focus,input[type=color]:focus{outline:none}
+input[type=range]:focus-visible,input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+input[type=color]:disabled{opacity:.4;cursor:default}
 input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid var(--border);border-radius:6px;background:var(--field);cursor:pointer}
 .crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .crow input[type=text]{flex:1}
 /* Buttons */
 .btn-full:disabled{opacity:.5;cursor:default}
+.btn-full.danger{background:var(--bad-bg);color:var(--bad);border:1.5px solid var(--bad)}
+.confirm{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text2);margin-top:8px}
 .btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--on-accent)}
 footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 </style>
@@ -109,6 +119,13 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
     <button type="submit" class="switch" id="power" role="switch" aria-checked="false" aria-label="Lights on"><span class="switch-text">Toggle</span></button>
   </form>
 
+  <div class="sec"><label for="brightness">Brightness</label></div>
+  <form class="bright" id="brightness_form" action="/api/brightness" method="post">
+    <input type="range" name="brightness" id="brightness" min="1" max="100" value="100">
+    <output id="brightness_text" for="brightness">100%</output>
+    <button type="submit" class="reset nojs">Set</button>
+  </form>
+
   <div class="sec">Mode</div>
   <form id="mode_form" action="/api/mode" method="post">
     <div class="modes" role="group" aria-label="Mode">
@@ -117,7 +134,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       <button type="submit" name="mode" value="CheerLights" aria-pressed="false">CheerLights</button>
     </div>
     <div class="crow" id="colour_row">
-      <input type="color" name="colour" id="colour" value="#ffffff">
+      <input type="color" name="colour" id="colour" value="#ffb46b">
       <label for="colour" id="colour_text">Colour</label>
       <button type="submit" form="default_form" class="reset" id="default_btn" title="Return to the default colour">
         <span class="swatch" id="default_swatch"></span>Default
@@ -167,9 +184,14 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       </div>
     </div>
     <div class="frow">
+      <div class="field"><label for="default_brightness">Default Brightness (%)</label>
+        <input type="number" required name="default_brightness" id="default_brightness" min="1" max="100">
+      </div>
+    </div>
+    <div class="frow">
       <div class="field"><label for="default_colour">Default Colour</label>
         <div class="crow">
-          <input type="color" name="default_colour" id="default_colour" value="#ffffff">
+          <input type="color" name="default_colour" id="default_colour" value="#ffb46b">
           <span class="note" style="margin:0" id="default_colour_text"></span>
         </div>
       </div>
@@ -198,6 +220,19 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
   </form>
+
+  <div class="sec">Reset</div>
+  <p class="note">Both keep the LED count and type. Reset settings keeps the Wi-Fi network too; factory reset forgets it, and the device starts its PlasmaStick-SETUP hotspot to be set up again.</p>
+  <form class="reset-form" action="/api/reset" method="post" data-confirm="Reset all settings to their defaults? The device keeps its Wi-Fi network and restarts.">
+    <label class="confirm nojs"><input type="checkbox" name="confirm" value="yes" required> Yes, reset settings</label>
+    <button type="submit" class="btn-full danger">Reset settings</button>
+  </form>
+  <form class="reset-form" action="/api/reset" method="post" data-confirm="Factory reset? This also forgets the Wi-Fi network: you'll need to join the PlasmaStick-SETUP hotspot to set the device up again." data-wifi="true">
+    <input type="hidden" name="wifi" value="true">
+    <label class="confirm nojs"><input type="checkbox" name="confirm" value="yes" required> Yes, forget everything</label>
+    <button type="submit" class="btn-full danger">Factory reset</button>
+  </form>
+  <p class="msg" id="reset_msg" role="status" aria-live="polite"></p>
 </div>
 
 <!-- NETWORK PANEL -->
@@ -295,6 +330,28 @@ function sel(id, v) { el(id).value = String(v); }
 var info = null;
 var defaultColour = null;  // from /api/config
 var colourSending = false, pendingColour = null;
+var brightnessSending = false, pendingBrightness = null;
+var expected = {};  // key: {value, until}: what was just asked for
+
+function expect(key, value) { expected[key] = { value: value, until: Date.now() + 3000 }; }
+// The device's value, or what was just asked for if the device hasn't caught up yet.
+function shown(i, key) {
+  var e = expected[key];
+  if (e) {
+    if (i[key] === e.value || Date.now() > e.until) delete expected[key];
+    else return e.value;
+  }
+  return i[key];
+}
+
+// The colour picker and Default button stay in place, enabled in Colour mode only.
+function showMode(mode) {
+  modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === mode ? 'true' : 'false'); });
+  el('colour').disabled = mode !== 'Colour';
+  el('colour_text').textContent = mode === 'Colour' ? 'Pick a colour'
+    : mode === 'CheerLights' && info && info.colour ? 'CheerLights: ' + info.colour : 'Colour mode only';
+  showDefault(mode);
+}
 var modeButtons = document.querySelectorAll('.modes button');
 var restarting = false;  // after a save that restarts the device
 
@@ -329,18 +386,22 @@ function render(i) {
   el('footer_name').textContent = i.name;
   el('footer_info').textContent = '\u2022 v' + i.version + ' \u2022 up ' + duration(i.uptime_s) +
     ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
+  var on = shown(i, 'state');
   var st = el('state');
-  st.textContent = i.state ? 'On' : 'Off';
-  st.className = 'badge' + (i.state ? ' on' : '');
-  el('power').setAttribute('aria-checked', i.state ? 'true' : 'false');
-  modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === i.mode ? 'true' : 'false'); });
-  el('colour_row').hidden = i.mode !== 'Colour';
+  st.textContent = on ? 'On' : 'Off';
+  st.className = 'badge' + (on ? ' on' : '');
+  el('power').setAttribute('aria-checked', on ? 'true' : 'false');
+  // Don't move the slider while it's being dragged.
+  var b = shown(i, 'brightness');
+  if (!brightnessSending) {
+    el('brightness').value = b;
+    el('brightness_text').textContent = b + '%';
+  }
   // Don't overwrite a colour while it's being picked.
-  if (i.colour && !colourSending && !pendingColour && document.activeElement !== el('colour')) {
+  if (i.colour && !colourSending && document.activeElement !== el('colour')) {
     el('colour').value = i.colour.toLowerCase();
   }
-  el('colour_text').textContent = i.mode === 'CheerLights' && i.colour ? 'CheerLights: ' + i.colour : 'Pick a colour';
-  showDefault();
+  showMode(shown(i, 'mode'));
 
   var health = el('health'), problems = [];
   health.textContent = '';
@@ -362,12 +423,14 @@ function render(i) {
   showAlert(problems.join(' '));
 }
 
-// The Default button is disabled when the default colour is already showing.
-function showDefault() {
+// The Default button is disabled outside Colour mode, and when the default
+// colour is already showing.
+function showDefault(mode) {
   if (!defaultColour) return;
   el('default_swatch').style.backgroundColor = defaultColour;
-  var current = info && info.mode === 'Colour' && info.colour;
-  el('default_btn').disabled = !!current && current.toLowerCase() === defaultColour.toLowerCase();
+  var current = info && info.colour;
+  el('default_btn').disabled = mode !== 'Colour' ||
+    (!!current && !colourSending && current.toLowerCase() === defaultColour.toLowerCase());
 }
 
 function showAlert(text) {
@@ -395,14 +458,15 @@ el('power').addEventListener('click', function (e) {
   e.preventDefault();
   var on = !(info && info.state);
   el('power').setAttribute('aria-checked', on ? 'true' : 'false');  // show it straight away
+  expect('state', on);
   act('/api/power/' + (on ? 'on' : 'off'));
 });
 
 modeButtons.forEach(function (b) {
   b.addEventListener('click', function (e) {
     e.preventDefault();
-    modeButtons.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-    el('colour_row').hidden = b.value !== 'Colour';
+    expect('mode', b.value);
+    showMode(b.value);
     var body = { mode: b.value };
     if (b.value === 'Colour') body.parameters = { Colour: el('colour').value };
     act('/api/mode', body);
@@ -410,6 +474,8 @@ modeButtons.forEach(function (b) {
 });
 
 // Apply colours while picking, at most one request at a time.
+// The loop stays "sending" through the pause between requests, so a change
+// made during the pause is picked up by it rather than starting a second loop.
 function sendColour() {
   colourSending = true;
   var c = pendingColour;
@@ -417,9 +483,9 @@ function sendColour() {
   post('/api/mode', { mode: 'Colour', parameters: { Colour: c } })
     .catch(function (e) { say(e.message); })
     .then(function () {
+      if (pendingColour) { setTimeout(sendColour, 100); return; }
       colourSending = false;
-      if (pendingColour) setTimeout(sendColour, 100);
-      else setTimeout(refresh, 300);
+      setTimeout(refresh, 300);
     });
 }
 el('default_btn').addEventListener('click', function (e) {
@@ -427,7 +493,30 @@ el('default_btn').addEventListener('click', function (e) {
   pendingColour = null;
   if (defaultColour) el('colour').value = defaultColour.toLowerCase();
   el('default_btn').disabled = true;
+  expect('mode', 'Colour');
   act('/api/mode', { mode: 'Colour' });  // no colour: the device uses its configured default
+});
+
+// Apply brightness while dragging, at most one request at a time.
+function sendBrightness() {
+  brightnessSending = true;
+  var b = pendingBrightness;
+  pendingBrightness = null;
+  expect('brightness', b);
+  post('/api/brightness', { brightness: b })
+    .catch(function (e) { say(e.message); })
+    .then(function () {
+      if (pendingBrightness !== null) { setTimeout(sendBrightness, 100); return; }
+      brightnessSending = false;
+      setTimeout(refresh, 300);
+    });
+}
+el('brightness_form').addEventListener('submit', function (e) { e.preventDefault(); });
+el('brightness').addEventListener('input', function () {
+  say('');
+  el('brightness_text').textContent = el('brightness').value + '%';
+  pendingBrightness = Math.round(Number(el('brightness').value));
+  if (!brightnessSending) sendBrightness();
 });
 
 el('colour').addEventListener('input', function () {
@@ -442,7 +531,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 
 // Settings forms. Settings in LIVE apply at once; changing any other one
 // restarts the device, and the Save button says so before it's pressed.
-var LIVE = ['tab', 'default_state', 'default_mode', 'default_colour', 'cheerlights_url',
+var LIVE = ['tab', 'default_state', 'default_brightness', 'default_mode', 'default_colour', 'cheerlights_url',
   'cheerlights_update_interval', 'log_level', 'web_password', 'web_password_clear'];
 var settingsForms = document.querySelectorAll('form.settings');
 
@@ -505,7 +594,7 @@ settingsForms.forEach(function (f) {
         if (f.elements.default_colour) {
           defaultColour = f.elements.default_colour.value;
           el('default_colour_text').textContent = defaultColour;
-          showDefault();
+          if (info) render(info);
         }
         if (f.elements.web_password) {
           if (f.elements.web_password_clear.value === 'true') el('web_password_state').textContent = 'none set';
@@ -527,19 +616,41 @@ settingsForms.forEach(function (f) {
   });
 });
 
+document.querySelectorAll('form.reset-form').forEach(function (f) {
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!confirm(f.dataset.confirm)) return;
+    var msg = el('reset_msg'), wifi = f.dataset.wifi === 'true';
+    msg.className = 'msg good';
+    msg.textContent = 'Resetting\u2026';
+    post('/api/reset', { confirm: true, wifi: wifi })
+      .then(function () {
+        if (wifi) {
+          restarting = true;
+          msg.textContent = 'Reset. The device is starting setup mode: join the PlasmaStick-SETUP Wi-Fi network to set it up again.';
+        } else {
+          msg.textContent = 'Reset. Restarting the device\u2026';
+          waitForRestart(msg);
+        }
+      })
+      .catch(function (err) { msg.className = 'msg'; msg.textContent = 'Not reset: ' + err.message; });
+  });
+});
+
 fetch('/api/config')
   .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(function (cfg) {
     var dev = cfg.device, wl = cfg.wlan, mq = cfg.mqtt;
-    var colour = (dev.mode_parameters && dev.mode_parameters.Colour) || '#ffffff';
+    var colour = (dev.mode_parameters && dev.mode_parameters.Colour) || '#ffb46b';
     el('default_colour').value = colour.toLowerCase();
     defaultColour = colour;
-    showDefault();
+    showDefault(info ? shown(info, 'mode') : null);
     el('default_colour_text').textContent = colour;
     el('device_name').value = dev.device_name;
     el('device_led_count').value = dev.device_led_count;
     sel('device_led_rgbw', !!dev.device_led_rgbw);
     sel('default_state', !!dev.default_state);
+    el('default_brightness').value = dev.default_brightness;
     sel('default_mode', dev.default_mode);
     sel('log_level', dev.log_level);
     el('cheerlights_url').value = dev.cheerlights_url;

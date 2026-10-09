@@ -3,6 +3,7 @@ import plasma
 import uasyncio as asyncio
 import asynchttp
 from log import Log
+from deviceconfig import DEFAULT_COLOUR
 
 TAG = "LEDS"
 
@@ -18,6 +19,17 @@ def is_valid_colour(value):
         return False
     digits = value[1:] if value.startswith('#') else value
     return len(digits) == 6 and all(c in _HEX_DIGITS for c in digits)
+
+
+# The plasma driver gamma-corrects every value it's given (set_rgb and set_hsv),
+# so its input is already perceptual, but anything below 22 comes out as 0.
+MIN_VISIBLE = 22
+
+
+def light_output(percent):
+    """The share (0-1) of full driver input for percent brightness: 1% is the
+    dimmest level a full-on channel still shows, 100% is full."""
+    return (MIN_VISIBLE + (255 - MIN_VISIBLE) * (percent - 1) / 99) / 255
 
 
 def mode_parameters_error(mode, parameters):
@@ -75,6 +87,12 @@ class LedStrip:
         # controller applies and repaints once instead of every loop.
         self._dirty = True
 
+        # Brightness in percent, applied by scaling every colour painted. A change
+        # only repaints: it doesn't restart Rainbows or refetch CheerLights.
+        self.brightness = device_config.default_brightness
+        self._output = light_output(self.brightness)
+        self._repaint = False
+
         self.set_next_state(self.device_config.default_state)
         self.set_next_mode(self.device_config.default_mode, device_config.mode_parameters)
         
@@ -88,6 +106,12 @@ class LedStrip:
     def set_next_state(self, state):
         self.next_state = state
         self._dirty = True
+
+    def set_brightness(self, brightness):
+        self.brightness = brightness
+        self._output = light_output(brightness)
+        self._repaint = True
+        self.changed.set()
 
     def set_mode(self, mode):        
         self.previous_mode = self.current_mode
@@ -132,16 +156,20 @@ class LedStrip:
 
     def report(self):
         """What the strip is showing: {'state', 'mode', 'colour'}."""
-        return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour}
+        return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour,
+                'brightness': self.brightness}
+
+    def paint(self, colour):
+        """Set every LED to colour ('#rrggbb'), scaled by the brightness."""
+        r, g, b = self.hex_to_rgb(colour)
+        f = self._output
+        r, g, b = int(r * f + 0.5), int(g * f + 0.5), int(b * f + 0.5)
+        for i in range(self.device_config.device_led_count):
+            self.led_strip.set_rgb(i, r, g, b)
 
     def set_colour(self, colour):
         self.current_colour = colour
-        
-        r, g, b = self.hex_to_rgb(colour)
-
-        # light up the LEDs
-        for i in range(self.device_config.device_led_count):
-            self.led_strip.set_rgb(i, r, g, b)
+        self.paint(colour)
     
     async def _fetch_cheerlights(self):
         """Fetch the CheerLights colour without blocking the event loop."""
@@ -155,9 +183,7 @@ class LedStrip:
             # The strip may have been switched off or changed mode while waiting.
             if not (self.current_state and self.current_mode == 'CheerLights'):
                 return
-            r, g, b = self.hex_to_rgb(hex_colour)
-            for i in range(self.device_config.device_led_count):
-                self.led_strip.set_rgb(i, r, g, b)
+            self.paint(hex_colour)
             Log.info(TAG, 'LEDs set to {}'.format(hex_colour))
             if hex_colour != self.current_colour:
                 self.current_colour = hex_colour
@@ -168,7 +194,8 @@ class LedStrip:
     async def controller(self):        
         while True:
             try:
-                repaint = False
+                repaint = self._repaint
+                self._repaint = False
                 if self._dirty:
                     self._dirty = False
                     repaint = True
@@ -184,7 +211,7 @@ class LedStrip:
                     Log.debug(TAG, 'State / Mode change, so reinitialise')
                     if self.current_mode == 'Colour':
                         parms = self.mode_parameters if isinstance(self.mode_parameters, dict) else {}
-                        self.current_colour = parms.get('Colour', '#ffffff')
+                        self.current_colour = parms.get('Colour', DEFAULT_COLOUR)
                     elif self.current_mode == 'Rainbows':
                         self.current_colour = None
                     # CheerLights keeps the last fetched colour until a new one arrives.
@@ -202,12 +229,14 @@ class LedStrip:
                     if self.current_mode == 'Colour':
                         if repaint:
                             parms = self.mode_parameters if isinstance(self.mode_parameters, dict) else {}
-                            self.set_colour(parms.get('Colour', '#ffffff'))
+                            self.set_colour(parms.get('Colour', DEFAULT_COLOUR))
                         await asyncio.sleep_ms(100)
 
                     # Set LEDs according to CheerLights
                     elif self.current_mode == 'CheerLights':
                         currentTime = time.time()
+                        if repaint and self.current_colour and self.cheerlights_last_update:
+                            self.paint(self.current_colour)  # a new brightness
                         if (currentTime - self.cheerlights_last_update > self.device_config.cheerlights_update_interval):
                             # Spawn async task for HTTP request to avoid blocking event loop
                             if not self._cheerlights_task or self._cheerlights_task.done():
@@ -219,9 +248,10 @@ class LedStrip:
                         self.rainbows_speed = min(255, max(1, self.rainbows_speed))
                         self.rainbows_offset += float(self.rainbows_speed) / 2000.0
 
+                        value = self._output
                         for i in range(self.device_config.device_led_count):
                             hue = float(i) / self.device_config.device_led_count
-                            self.led_strip.set_hsv(i, hue + self.rainbows_offset, 1.0, 1.0)
+                            self.led_strip.set_hsv(i, hue + self.rainbows_offset, 1.0, value)
 
                         await asyncio.sleep_ms(self._rainbows_sleep_ms)
 

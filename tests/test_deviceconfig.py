@@ -96,3 +96,51 @@ def test_log_level_defaults_to_info_and_rejects_bad_values(device_dir):
     assert DeviceConfig.loadConfigFromFile().log_level == 2
     write(device_dir / 'config.json', {'device': {'log_level': 'loud'}})
     assert DeviceConfig.loadConfigFromFile().log_level == 1
+
+
+def test_defaults_are_warm_white_at_two_thirds_brightness(device_dir):
+    cfg = DeviceConfig.loadConfigFromFile()
+    assert cfg.mode_parameters == {'Colour': '#ffb46b'}
+    assert cfg.default_brightness == 66
+
+
+def test_default_brightness_rejects_bad_values(device_dir):
+    write(device_dir / 'config.json', {'device': {'default_brightness': 30}})
+    assert DeviceConfig.loadConfigFromFile().default_brightness == 30
+    write(device_dir / 'config.json', {'device': {'default_brightness': 0}})
+    assert DeviceConfig.loadConfigFromFile().default_brightness == 66
+
+
+def _setup_files(device_dir):
+    write(device_dir / 'config.json', {
+        'device': {'device_led_count': 49, 'device_led_rgbw': True, 'default_brightness': 20},
+        'mqtt': {'broker_address': 'mqtt.local', 'password': 'secret'},
+        'web': {'password': 'letmein'},
+    })
+    write(device_dir / 'provisioning.json', {'ssid': 'Home', 'password': 'pw'})
+    write(device_dir / 'device_name.json', {'name': 'Kitchen'})
+
+
+def test_reset_settings_keeps_the_leds_and_wifi(device_dir):
+    _setup_files(device_dir)
+    DeviceConfig.reset(keep_wifi=True)
+    assert json.loads((device_dir / 'config.json').read_text()) == {
+        'device': {'device_led_count': 49, 'device_led_rgbw': True}}
+    assert (device_dir / 'provisioning.json').exists()
+    assert not (device_dir / 'device_name.json').exists()
+    cfg = DeviceConfig.loadConfigFromFile()
+    assert cfg.default_brightness == 66 and cfg.web_password == '' and cfg.mqttconfig.broker_address == ''
+
+
+def test_factory_reset_also_forgets_wifi(device_dir):
+    _setup_files(device_dir)
+    DeviceConfig.reset(keep_wifi=False)
+    assert not (device_dir / 'provisioning.json').exists()
+    assert DeviceConfig.provisioning_needed()
+    assert DeviceConfig.loadConfigFromFile().device_led_count == 49
+
+
+def test_reset_settings_keeps_wifi_saved_in_config_json_on_older_setups(device_dir):
+    write(device_dir / 'config.json', {'wlan': {'ssid': 'Home', 'password': 'pw', 'reconnect_wait': 99}})
+    DeviceConfig.reset(keep_wifi=True)
+    assert json.loads((device_dir / 'config.json').read_text())['wlan'] == {'ssid': 'Home', 'password': 'pw'}

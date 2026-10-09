@@ -86,7 +86,20 @@ gitignored, so passwords won't be committed).
 Wi-Fi credentials and the device name are set through setup mode and stored in `provisioning.json` on the device.
 
 The USB serial log's detail is set by `device.log_level` (Device tab): 0 for warnings and errors, 1 (the default) to
-add info, 2 to add debug. It takes effect on the next restart.
+add info, 2 to add debug.
+
+Saving settings only restarts the device when it has to: the LED count and type, the device name, and the Wi-Fi and
+MQTT settings are read at boot, while the defaults (state, mode, colour, brightness), CheerLights settings, log level
+and web password apply at once. The Save button says "Save & Restart" when a change needs a restart.
+
+Brightness is a percentage, 1-100, that scales every mode. It can be changed from the web UI, `POST /api/brightness`
+(`{"brightness": 40}`), MQTT or Home Assistant, and starts at `device.default_brightness` (66) on boot. The default
+colour is a warm white, `#ffb46b`.
+
+The Device tab has two reset buttons. Both keep the LED count and type. **Reset settings** puts everything else back
+to its default (including the MQTT settings, web password and a name set in the web UI) and keeps the Wi-Fi network.
+**Factory reset** also forgets the Wi-Fi network, so the device starts setup mode. From a script:
+`POST /api/reset` with `{"confirm": true}`, plus `"wifi": true` for a factory reset.
 
 ## MQTT
 
@@ -95,13 +108,13 @@ name:
 
 | Topic | Direction | Contents |
 |---|---|---|
-| `/home/device/<name>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}` or `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` |
-| `/home/device/<name>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
+| `/home/device/<name>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}`, `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` or `{"MessageType": "BrightnessChange", "Parameters": {"Brightness": 40}}` (percent, 1-100) |
+| `/home/device/<name>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}, "Brightness": 100}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
 | `/home/device/<name>/status` | from the device, retained | `online` while connected. The broker sets `offline` (the MQTT will) if the device drops off |
 
 With **Home Assistant discovery** turned on (`mqtt.ha_discovery`), the device also publishes a retained discovery
-config to `homeassistant/light/<name>/config`, so it appears in Home Assistant as a light with an RGB colour and the
-modes as effects. Home Assistant controls it through `/home/device/<name>/ha/set` and reads
+config to `homeassistant/light/<name>/config`, so it appears in Home Assistant as a light with an RGB colour,
+brightness and the modes as effects. Home Assistant controls it through `/home/device/<name>/ha/set` and reads
 `/home/device/<name>/ha/state`, both in Home Assistant's JSON light schema. Turning discovery off removes the entity
 on the next connection.
 

@@ -7,14 +7,18 @@ from deviceidentity import sanitize_device_name
 
 TAG = "CFG"
 
+# A warm white (about 3000 K), the colour until one is chosen.
+DEFAULT_COLOUR = "#ffb46b"
+
 _DEFAULT_CONFIG = {
     "device": {
         "device_name": "",  # empty: generated from the board's unique id
         "device_led_count": 10,
         "device_led_rgbw": False,
         "default_mode": "Colour",
-        "mode_parameters": {"Colour": "#ffffff"},
+        "mode_parameters": {"Colour": DEFAULT_COLOUR},
         "default_state": False,
+        "default_brightness": 66,  # percent, 1-100
         # http, as in config.example.json: a TLS handshake holds the CPU for about a second.
         "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
         "cheerlights_update_interval": 60,
@@ -46,8 +50,16 @@ _DEFAULT_CONFIG = {
 
 
 DEVICE_NAME_FILE = "device_name.json"
+
+
+def is_valid_brightness(value):
+    """True for a whole-number brightness percentage, 1-100."""
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 100
+
+
 # Written by wlan.py to ask for setup mode on the next boot; removed when read.
 SETUP_REQUEST_FILE = "setup_request"
+PROVISIONING_FILE = "provisioning.json"
 
 
 def _redact_passwords(configdata):
@@ -128,6 +140,10 @@ class DeviceConfig:
         if self.log_level not in (0, 1, 2):
             Log.warn(TAG, f'Ignoring log_level {self.log_level!r}; it must be 0, 1 or 2')
             self.log_level = 1
+        self.default_brightness = configdata["device"]["default_brightness"]
+        if not is_valid_brightness(self.default_brightness):
+            Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')
+            self.default_brightness = _DEFAULT_CONFIG["device"]["default_brightness"]
 
         self.wlanconfig = WlanConfig(configdata["wlan"])
         self.mqttconfig = MQTTConfig(self.device_name, configdata["mqtt"])
@@ -213,6 +229,31 @@ class DeviceConfig:
                 Log.info(TAG, 'Web password cleared')
         except (OSError, ValueError, AttributeError) as e:
             Log.warn(TAG, f'Could not clear the web password: {e}')
+
+    @staticmethod
+    def reset(keep_wifi):
+        """Put the settings back to defaults, keeping the LED hardware (count and
+        type: they describe the strip, not a preference). With keep_wifi False
+        this also forgets the Wi-Fi network, so the next boot starts setup mode."""
+        try:
+            with open("config.json") as fp:
+                old = ujson.load(fp)
+        except (OSError, ValueError):
+            old = {}
+        device = old.get("device") if isinstance(old.get("device"), dict) else {}
+        configdata = {"device": {k: device[k] for k in ("device_led_count", "device_led_rgbw") if k in device}}
+        wlan = old.get("wlan") if isinstance(old.get("wlan"), dict) else {}
+        if keep_wifi and wlan.get("ssid"):
+            # Older setups keep the Wi-Fi network in config.json, not provisioning.json.
+            configdata["wlan"] = {"ssid": wlan["ssid"], "password": wlan.get("password", "")}
+        DeviceConfig.saveConfigToFile(configdata)
+        removed = [DEVICE_NAME_FILE] + ([] if keep_wifi else [PROVISIONING_FILE, SETUP_REQUEST_FILE])
+        for name in removed:
+            try:
+                os.remove(name)
+            except OSError:
+                pass
+        Log.warn(TAG, 'Settings reset to defaults' + ('' if keep_wifi else ', Wi-Fi forgotten'))
 
     @staticmethod
     def saveConfigToFile(configdata):

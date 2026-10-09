@@ -4,7 +4,7 @@ import ujson
 import machine
 import network
 from log import Log
-from deviceconfig import DeviceConfig, DEVICE_NAME_FILE
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, is_valid_brightness
 from deviceidentity import sanitize_device_name
 from ledstrip import MODES, mode_parameters_error
 from asynchttp import parse_url
@@ -14,7 +14,7 @@ TAG = "API"
 
 # Device settings that are read where they're used, so a save applies them at
 # once. Everything else is only read at boot and needs a restart.
-LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state',
+LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
                     'cheerlights_url', 'cheerlights_update_interval', 'log_level')
 
 
@@ -86,6 +86,7 @@ class DeviceAPI:
             'state': self.led_strip.current_state,
             'mode': self.led_strip.current_mode,
             'colour': self.led_strip.current_colour,
+            'brightness': self.led_strip.brightness,
             'led_count': self.device_config.device_led_count,
             'uptime_s': time.time() - self._started,
             'wifi': {'ssid': self.device_config.wlanconfig.ssid, 'ip': sta.ifconfig()[0], 'rssi': rssi},
@@ -134,6 +135,16 @@ class DeviceAPI:
             return True
         return False
 
+    def set_brightness(self, brightness):
+        """Set brightness in percent, 1-100; fractions are rounded. Returns False if invalid."""
+        if isinstance(brightness, float):
+            brightness = int(brightness + 0.5) if brightness >= 0 else -1
+        if not is_valid_brightness(brightness):
+            return False
+        self.led_strip.set_brightness(brightness)
+        Log.info(TAG, f'Brightness set to: {brightness}%')
+        return True
+
     def get_config(self):
         """Return current config as dict, omitting passwords."""
         dc = self.device_config
@@ -145,6 +156,7 @@ class DeviceAPI:
                 'default_mode': dc.default_mode,
                 'mode_parameters': dc.mode_parameters,
                 'default_state': dc.default_state,
+                'default_brightness': dc.default_brightness,
                 'cheerlights_url': dc.cheerlights_url,
                 'cheerlights_update_interval': dc.cheerlights_update_interval,
                 'log_level': dc.log_level,
@@ -204,6 +216,11 @@ class DeviceAPI:
                 cfg['device']['mode_parameters'] = dev['mode_parameters']
             if 'default_state' in dev:
                 cfg['device']['default_state'] = bool(dev['default_state'])
+            if 'default_brightness' in dev:
+                v = dev['default_brightness']
+                if not is_valid_brightness(v):
+                    return False, 'default_brightness must be a whole number, 1-100'
+                cfg['device']['default_brightness'] = v
             if 'cheerlights_url' in dev:
                 url = str(dev['cheerlights_url']).strip()
                 try:
@@ -296,6 +313,10 @@ class DeviceAPI:
         """True if saved settings (or a rename) differ from those running."""
         return (self.device_name != self.device_config.device_name or
                 restart_settings(self._config_cache) != self._running_settings)
+
+    def reset(self, keep_wifi):
+        """Reset settings to defaults (see DeviceConfig.reset). Restart afterwards."""
+        DeviceConfig.reset(keep_wifi)
 
     def restart(self):
         """Soft-reset the device. Does not return."""

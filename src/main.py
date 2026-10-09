@@ -138,6 +138,10 @@ async def messages(client):
                 else:
                     Log.warn(TAG, 'Ignoring StateChange with non-boolean State')
 
+            elif message_type == "BrightnessChange":
+                if not device_api.set_brightness(parameters.get("Brightness")):
+                    Log.warn(TAG, 'Ignoring BrightnessChange: Brightness must be a whole number, 1-100')
+
             elif message_type == "ModeChange":
                 new_mode = parameters.get("Mode")
                 if not device_api.set_mode(new_mode, parameters.get("ModeParameters")):
@@ -164,6 +168,8 @@ def handle_ha_command(payload):
                 device_api.power_on()
             else:
                 device_api.power_off()
+        elif action[0] == 'brightness':
+            device_api.set_brightness(action[1])
         elif not device_api.set_mode(action[1], action[2]):
             Log.warn(TAG, 'Ignoring Home Assistant command with an invalid mode or colour')
 

@@ -1,6 +1,6 @@
 """Smoke-test a running device over HTTP and MQTT (host-side, not deployed).
 
-Checks the HTTP API and web UI, then publishes StateChange/ModeChange control
+Checks the HTTP API and web UI, then publishes StateChange/ModeChange/BrightnessChange control
 messages from this PC and confirms the device applied them through /api/info.
 The device's original power state and mode are restored at the end.
 
@@ -139,6 +139,13 @@ def test_http(dev):
     status, _, _, _ = dev.request('POST', '/api/mode', {'mode': 'NoSuchMode'})
     check('http.mode_invalid_rejected', status == 400 and dev.info().get('mode') == 'Rainbows', f'{status}')
 
+    status, _, _, _ = dev.request('POST', '/api/brightness', {'brightness': 40})
+    ok, value = dev.wait_for('brightness', 40)
+    check('http.brightness', status == 200 and ok, f'brightness={value}')
+
+    status, _, _, _ = dev.request('POST', '/api/brightness', {'brightness': 0})
+    check('http.brightness_invalid_rejected', status == 400 and dev.info().get('brightness') == 40, f'{status}')
+
     return config if isinstance(config, dict) else {}
 
 
@@ -204,15 +211,21 @@ def test_mqtt(dev, config, args):
         ok, value = dev.wait_for('mode', 'Rainbows')
         check('mqtt.mode_rainbows', ok, f'mode={value}')
 
+        publish({'MessageType': 'BrightnessChange', 'Parameters': {'Brightness': 60}})
+        ok, value = dev.wait_for('brightness', 60)
+        check('mqtt.brightness', ok, f'brightness={value}')
+
         # Bad messages must be ignored without changing anything or breaking the handler.
         publish({'MessageType': 'ModeChange', 'Parameters': {'Mode': 'NoSuchMode'}})
         publish({'MessageType': 'StateChange', 'Parameters': {'State': 'yes'}})
+        publish({'MessageType': 'BrightnessChange', 'Parameters': {'Brightness': 500}})
         publish('this is not json')
         publish({'MessageType': 'Unknown'})
         time.sleep(1)
         info = dev.info()
-        check('mqtt.bad_messages_ignored', info.get('mode') == 'Rainbows' and info.get('state') is True,
-              f'mode={info.get("mode")} state={info.get("state")}')
+        check('mqtt.bad_messages_ignored',
+              info.get('mode') == 'Rainbows' and info.get('state') is True and info.get('brightness') == 60,
+              f'mode={info.get("mode")} state={info.get("state")} brightness={info.get("brightness")}')
 
         publish({'MessageType': 'StateChange', 'Parameters': {'State': False}})
         ok, value = dev.wait_for('state', False)
@@ -279,8 +292,10 @@ def main():
         # Mode parameters aren't exposed, so the mode comes back with its configured defaults.
         try:
             dev.request('POST', '/api/mode', {'mode': original.get('mode')})
+            if original.get('brightness'):
+                dev.request('POST', '/api/brightness', {'brightness': original['brightness']})
             dev.request('POST', f'/api/power/{"on" if original.get("state") else "off"}', {})
-            print(f'RESTORED state={original.get("state")} mode={original.get("mode")}')
+            print(f'RESTORED state={original.get("state")} mode={original.get("mode")} brightness={original.get("brightness")}')
         except OSError as e:
             print(f'RESTORE_FAILED {e}')
 

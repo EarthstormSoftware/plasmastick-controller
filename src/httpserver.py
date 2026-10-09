@@ -3,6 +3,7 @@ import ubinascii
 from microdot import Microdot, Response
 from log import Log
 from htmlutil import escape
+from deviceconfig import DEFAULT_COLOUR
 
 TAG = "HTTP"
 
@@ -146,6 +147,25 @@ class HTTPServer:
                 Log.error(TAG, f'Mode request failed: {e}')
                 return {'success': False, 'error': str(e)}, 400
 
+        @app.post('/api/brightness')
+        async def api_brightness(request):
+            try:
+                if _is_form(request):
+                    try:
+                        brightness = int((request.form or {}).get('brightness', ''))
+                    except ValueError:
+                        brightness = None
+                    if not api.set_brightness(brightness):
+                        return '<html><body><p>Error: brightness must be 1-100.</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
+                    return '', 303, {'Location': '/'}
+                brightness = (request.json or {}).get('brightness')
+                if api.set_brightness(brightness):
+                    return {'success': True, 'brightness': api.led_strip.brightness}
+                return {'success': False, 'error': 'brightness must be a whole number, 1-100'}, 400
+            except Exception as e:
+                Log.error(TAG, f'Brightness request failed: {e}')
+                return {'success': False, 'error': str(e)}, 400
+
         @app.post('/api/mqtt/enabled')
         async def api_mqtt_enabled(request):
             try:
@@ -183,6 +203,30 @@ class HTTPServer:
             asyncio.create_task(http_server._restart_soon())
             return {'success': True}
 
+        @app.post('/api/reset')
+        async def api_reset(request):
+            # Needs confirm, so a stray request can't wipe the settings. wifi
+            # also forgets the Wi-Fi network: the device restarts into setup mode.
+            if _is_form(request):
+                form = request.form or {}
+                confirmed, wifi = form.get('confirm') == 'yes', form.get('wifi') == 'true'
+            else:
+                data = request.json or {}
+                confirmed, wifi = data.get('confirm') is True, data.get('wifi') is True
+            if not confirmed:
+                return {'success': False, 'error': 'confirm must be true'}, 400
+            try:
+                api.reset(keep_wifi=not wifi)
+            except OSError as e:
+                Log.error(TAG, f'Reset failed: {e}')
+                return {'success': False, 'error': 'Reset failed: ' + str(e)}, 500
+            asyncio.create_task(http_server._restart_soon())
+            if _is_form(request):
+                text = ('Join the PlasmaStick-SETUP Wi-Fi network to set it up again.' if wifi
+                        else 'The device is restarting with default settings.')
+                return f'<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Reset</h2><p>{text}</p></body></html>', 200, {'Content-Type': 'text/html; charset=utf-8'}
+            return {'success': True, 'setup_mode': wifi}
+
         @app.post('/ctrl/config')
         async def ctrl_config(request):
             # The page's script asks for JSON; without script the browser
@@ -198,8 +242,9 @@ class HTTPServer:
                         'device_led_count': int(form.get('device_led_count', 10)),
                         'device_led_rgbw': form.get('device_led_rgbw', 'false') == 'true',
                         'default_mode': form.get('default_mode', 'Colour'),
-                        'mode_parameters': {'Colour': form.get('default_colour', '#ffffff')},
+                        'mode_parameters': {'Colour': form.get('default_colour', DEFAULT_COLOUR)},
                         'default_state': form.get('default_state', 'false') == 'true',
+                        'default_brightness': int(form.get('default_brightness', 100)),
                         'cheerlights_url': form.get('cheerlights_url', ''),
                         'cheerlights_update_interval': int(form.get('cheerlights_update_interval', 60)),
                         'log_level': int(form.get('log_level', 1)),
