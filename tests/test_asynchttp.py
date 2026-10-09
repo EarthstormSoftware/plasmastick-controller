@@ -72,3 +72,36 @@ def test_a_slow_server_times_out():
             with pytest.raises(asyncio.TimeoutError):
                 await asynchttp.get_json(url, timeout_s=0.3)
     run(go())
+
+
+def _fake_open_connection(monkeypatch, errors):
+    calls = []
+
+    async def fake(ip, port, **kwargs):
+        calls.append(kwargs)
+        if errors:
+            raise errors.pop(0)
+        return 'reader', 'writer'
+
+    monkeypatch.setattr(asynchttp.asyncio, 'open_connection', fake)
+    return calls
+
+
+def test_tls_retries_once_after_running_out_of_memory(monkeypatch):
+    calls = _fake_open_connection(monkeypatch, [OSError(12)])
+    assert run(asynchttp._open_tls('1.2.3.4', 443, 'example.com')) == ('reader', 'writer')
+    assert len(calls) == 2 and calls[0]['server_hostname'] == 'example.com'
+
+
+def test_tls_gives_up_after_one_retry(monkeypatch):
+    calls = _fake_open_connection(monkeypatch, [OSError(12), OSError(12)])
+    with pytest.raises(OSError):
+        run(asynchttp._open_tls('1.2.3.4', 443, 'example.com'))
+    assert len(calls) == 2
+
+
+def test_tls_other_errors_are_not_retried(monkeypatch):
+    calls = _fake_open_connection(monkeypatch, [OSError(113)])
+    with pytest.raises(OSError):
+        run(asynchttp._open_tls('1.2.3.4', 443, 'example.com'))
+    assert len(calls) == 1

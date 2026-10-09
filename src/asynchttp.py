@@ -1,3 +1,4 @@
+import gc
 import socket
 import ujson
 import uasyncio as asyncio
@@ -36,12 +37,28 @@ def _address(host, port):
     return ip
 
 
+async def _open_tls(ip, port, host):
+    # TLS needs a few large contiguous blocks (about 16 KB record buffers), and
+    # a fragmented heap often has the free memory but not in one piece: the
+    # handshake then fails with ENOMEM. Collecting first, and once more before
+    # a retry, gives it the best chance.
+    gc.collect()
+    try:
+        return await asyncio.open_connection(ip, port, ssl=True, server_hostname=host)
+    except OSError as e:
+        if e.args and e.args[0] != 12:  # ENOMEM
+            raise
+    Log.debug(TAG, 'Out of memory for TLS; collecting and retrying once')
+    gc.collect()
+    return await asyncio.open_connection(ip, port, ssl=True, server_hostname=host)
+
+
 async def _get(use_tls, host, port, path):
     ip = _address(host, port)
     if use_tls:
         # Note: the TLS handshake's key exchange still holds the CPU for
-        # around a second on an RP2040; plain http avoids that.
-        reader, writer = await asyncio.open_connection(ip, port, ssl=True, server_hostname=host)
+        # around 0.7 s on an RP2040; plain http avoids that.
+        reader, writer = await _open_tls(ip, port, host)
     else:
         reader, writer = await asyncio.open_connection(ip, port)
     try:
