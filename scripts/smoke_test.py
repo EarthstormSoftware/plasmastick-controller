@@ -239,13 +239,19 @@ def soak(dev, seconds, max_latency):
     failures, latencies = 0, []
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
+        # Each failed or slow poll is printed with the time, to match against the device log.
+        stamp = time.strftime('%H:%M:%S')
         try:
             status, _, _, elapsed = dev.request('GET', '/api/info')
             latencies.append(elapsed)
             if status != 200:
                 failures += 1
-        except OSError:
+                print(f'SOAK_FAIL {stamp} HTTP {status}', flush=True)
+            elif elapsed > max_latency:
+                print(f'SOAK_SLOW {stamp} {elapsed * 1000:.0f} ms', flush=True)
+        except OSError as e:
             failures += 1
+            print(f'SOAK_FAIL {stamp} {e!r}', flush=True)
         time.sleep(5)
     worst = max(latencies) if latencies else 0
     check('soak', failures == 0 and worst <= max_latency,

@@ -70,6 +70,13 @@ class WLAN:
     def connect(self):
         
         self.wlan.active(True)
+        # The radio's default power saving dozes between router beacons, which
+        # delays or drops incoming HTTP requests now and then. The stick runs from
+        # mains power anyway, so keep the radio awake.
+        try:
+            self.wlan.config(pm=self.wlan.PM_NONE)
+        except (AttributeError, ValueError, OSError) as e:
+            Log.warn(TAG, f'Could not turn off Wi-Fi power saving: {e}')
 
         # Scan (for the log) only on the first attempt after boot, which runs
         # before the event loop starts. scan() blocks for a second or two, and

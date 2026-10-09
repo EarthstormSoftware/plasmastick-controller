@@ -1,6 +1,7 @@
 import uasyncio as asyncio
 import ujson
 import gc
+import time
 from log import Log
 from deviceconfig import DeviceConfig
 from picoled import PicoLed
@@ -221,9 +222,23 @@ HEAP_LOG_INTERVAL_S = 300
 
 async def heap_monitor():
     # Logs free heap now and then, so long runs show leaks or fragmentation growth.
+    # Collects first, so the figures are live data rather than live data plus garbage.
     while True:
+        gc.collect()
         Log.info(TAG, f'Heap free: {gc.mem_free()} bytes, allocated: {gc.mem_alloc()} bytes')
         await asyncio.sleep(HEAP_LOG_INTERVAL_S)
+
+LOOP_LAG_WARN_MS = 500
+
+async def loop_monitor():
+    # Warns when the event loop was held up: a 100 ms sleep that wakes much later
+    # means some task blocked, which stalls HTTP, MQTT and the LEDs alike.
+    while True:
+        started = time.ticks_ms()
+        await asyncio.sleep_ms(100)
+        late = time.ticks_diff(time.ticks_ms(), started) - 100
+        if late > LOOP_LAG_WARN_MS:
+            Log.warn(TAG, f'Event loop was blocked for about {late} ms')
 
 async def main(client):
     global http_server
@@ -260,6 +275,7 @@ async def main(client):
     
     asyncio.create_task(http_server_task())
     asyncio.create_task(heap_monitor())
+    asyncio.create_task(loop_monitor())
 
     if client is None:
         Log.warn(TAG,'MQTT is disabled (no broker configured or mqtt.enabled=false). Running HTTP/API only.')
