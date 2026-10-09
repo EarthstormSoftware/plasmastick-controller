@@ -12,6 +12,19 @@ from version import VERSION
 
 TAG = "API"
 
+# Device settings that are read where they're used, so a save applies them at
+# once. Everything else is only read at boot and needs a restart.
+LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state',
+                    'cheerlights_url', 'cheerlights_update_interval', 'log_level')
+
+
+def restart_settings(cfg):
+    """A copy of the parts of a config that only take effect after a restart.
+    Compared with ==, as MicroPython doesn't keep dict key order."""
+    dev = cfg.get('device', {})
+    return ujson.loads(ujson.dumps([{k: v for k, v in dev.items() if k not in LIVE_DEVICE_KEYS},
+                                    cfg.get('wlan', {}), cfg.get('mqtt', {})]))
+
 class DeviceAPI:
     """
     REST API and internal control interface for PlasmaStick.
@@ -29,6 +42,7 @@ class DeviceAPI:
         # defaults), so they also fill in any keys an older file was missing.
         # A copy, so changes here don't alter the live settings in device_config.
         self._config_cache = ujson.loads(ujson.dumps(device_config.configdata))
+        self._running_settings = restart_settings(self._config_cache)
         # Checked on every HTTP request; updated as soon as a new one is saved.
         self.web_password = device_config.web_password
         self._started = time.time()
@@ -261,12 +275,27 @@ class DeviceAPI:
             DeviceConfig.saveConfigToFile(cfg)
             self._config_cache = cfg
             self.web_password = cfg.get('web', {}).get('password', '')
-            Log.info(TAG, 'Config saved.')
+            self._apply_live(cfg['device'])
+            Log.info(TAG, 'Config saved.' + (' Restart to apply it all.' if self.restart_required() else ''))
             return True, None
 
         except Exception as e:
             Log.error(TAG, f'Config save error: {e}')
             return False, str(e)
+
+    def _apply_live(self, dev):
+        """Apply the saved settings that don't need a restart."""
+        dc = self.device_config
+        for key in LIVE_DEVICE_KEYS:
+            if key in dev:
+                setattr(dc, key, dev[key])
+        if Log.level != dc.log_level:
+            Log.set_log_level(dc.log_level)
+
+    def restart_required(self):
+        """True if saved settings (or a rename) differ from those running."""
+        return (self.device_name != self.device_config.device_name or
+                restart_settings(self._config_cache) != self._running_settings)
 
     def restart(self):
         """Soft-reset the device. Does not return."""

@@ -172,7 +172,7 @@ class HTTPServer:
                 updates = request.json or {}
                 success, error = api.save_config(updates)
                 if success:
-                    return {'success': True}
+                    return {'success': True, 'restart_required': api.restart_required()}
                 return {'success': False, 'error': error}, 400
             except Exception as e:
                 Log.error(TAG, f'Config save request failed: {e}')
@@ -185,9 +185,13 @@ class HTTPServer:
 
         @app.post('/ctrl/config')
         async def ctrl_config(request):
+            # The page's script asks for JSON; without script the browser
+            # gets a small HTML page instead.
+            wants_json = 'application/json' in request.headers.get('Accept', '')
             try:
                 form = request.form or {}
                 tab = form.get('tab', 'device')
+                error = None
                 updates = {}
                 if tab == 'device':
                     updates['device'] = {
@@ -201,8 +205,8 @@ class HTTPServer:
                         'log_level': int(form.get('log_level', 1)),
                     }
                     name = (form.get('device_name') or '').strip()
-                    if name:
-                        api.set_device_name(name)
+                    if name and name != api.device_name and not api.set_device_name(name):
+                        error = 'Device name must be 1-32 characters'
                 else:
                     updates['wlan'] = {
                         'connect_timeout': int(form.get('connect_timeout', 30)),
@@ -224,13 +228,24 @@ class HTTPServer:
                         updates['web'] = {'clear_password': True}
                     elif form.get('web_password'):
                         updates['web'] = {'password': form.get('web_password')}
-                success, error = api.save_config(updates)
-                if success:
+                if not error:
+                    success, error = api.save_config(updates)
+                if error:
+                    if wants_json:
+                        return {'success': False, 'error': error}, 400
+                    return f'<html><body><p>Error: {escape(error)}</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
+                restart = api.restart_required()
+                if restart:
                     asyncio.create_task(http_server._restart_soon())
+                if wants_json:
+                    return {'success': True, 'restart': restart}
+                if restart:
                     return '<html><head><meta http-equiv="refresh" content="8;url=/"></head><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Saving&hellip;</h2><p>Device restarting. Page reloads in 8s.</p></body></html>', 200, {'Content-Type': 'text/html; charset=utf-8'}
-                return f'<html><body><p>Error: {escape(error)}</p><a href="/">Back</a></body></html>', 400, {'Content-Type': 'text/html; charset=utf-8'}
+                return '<html><head><meta http-equiv="refresh" content="1;url=/"></head><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Saved</h2></body></html>', 200, {'Content-Type': 'text/html; charset=utf-8'}
             except Exception as e:
                 Log.error(TAG, f'Config form failed: {e}')
+                if wants_json:
+                    return {'success': False, 'error': 'Request failed: check the values and try again'}, 500
                 return '<html><body><p>Error: request failed.</p><a href="/">Back</a></body></html>', 500, {'Content-Type': 'text/html; charset=utf-8'}
 
         @app.get('/favicon.ico')

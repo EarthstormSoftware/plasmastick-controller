@@ -4,63 +4,82 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PlasmaStick</title>
 <style>
+/* Colours: text is at least 4.5:1 on its background, borders and the switch track 3:1. */
+:root{color-scheme:light dark;
+  --page:#667eea;--card:#fff;--text:#333;--text2:#4a4f5c;--muted:#6b7080;
+  --line:#e6e7ec;--border:#8c92a0;--field:#fff;--accent:#4a56c9;--on-accent:#fff;
+  --on:#2e7d32;--off:#8c92a0;--chip:#f1f3f9;--ok-bg:#e7f5e8;--ok:#1e6b23;--bad-bg:#fdecea;--bad:#a12622}
+@media (prefers-color-scheme:dark){:root{
+  --page:#14151d;--card:#22242f;--text:#e8e9ef;--text2:#c4c7d2;--muted:#9aa0b0;
+  --line:#33364a;--border:#6b7080;--field:#2b2e3b;--accent:#9aa8ff;--on-accent:#14151d;
+  --off:#6b7080;--chip:#2f3240;--ok-bg:#1f3a24;--ok:#8fd694;--bad-bg:#452523;--bad:#ff9e98}}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,sans-serif;background:#667eea;min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
-.card{background:#fff;border-radius:12px;width:100%;max-width:500px;overflow:hidden}
+[hidden]{display:none!important}
+body{font-family:system-ui,sans-serif;background:var(--page);color:var(--text);min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
+.card{background:var(--card);border-radius:12px;width:100%;max-width:500px;overflow:hidden}
 header{padding:20px 20px 0;text-align:center}
-h1{font-size:21px;color:#333;margin-bottom:6px}
-.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:#e4e6eb;color:#3a3f4b}
-.badge.on{background:#4caf50;color:#fff}
+h1{font-size:21px;color:var(--text);margin-bottom:6px}
+.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:var(--chip);color:var(--text2)}
+.badge.on{background:var(--on);color:#fff}
 /* Health chips and problem banner */
 .health{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 2px}
-.chip{font-size:12px;padding:3px 9px;border-radius:10px;background:#f1f3f9;color:#3a3f4b}
-.chip.ok{background:#e7f5e8;color:#1e6b23}
-.chip.bad{background:#fdecea;color:#a12622}
-.alert{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:#fdecea;color:#a12622;font-size:13px;text-align:left}
-/* CSS-only tabs - radio inputs drive panel visibility */
-input[name=t]{display:none}
-nav{display:flex;border-bottom:2px solid #eee}
-nav label{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:#aaa;border-bottom:3px solid transparent;transition:.15s}
-nav label:hover{color:#555}
+.chip{font-size:12px;padding:3px 9px;border-radius:10px;background:var(--chip);color:var(--text2)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.alert{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px;text-align:left}
+/* CSS-only tabs - radio inputs drive panel visibility. The radios are hidden
+   visually but stay focusable, so arrow keys and screen readers can switch tabs. */
+input[name=t]{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+nav{display:flex;border-bottom:2px solid var(--line)}
+nav label{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;transition:.15s}
+nav label:hover{color:var(--text)}
 .pane{display:none;padding:20px}
 #tc:checked~nav label[for=tc],
 #td:checked~nav label[for=td],
-#tn:checked~nav label[for=tn]{color:#667eea;border-bottom-color:#667eea}
+#tn:checked~nav label[for=tn]{color:var(--accent);border-bottom-color:var(--accent)}
 #tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn{display:block}
+#tc:focus-visible~nav label[for=tc],
+#td:focus-visible~nav label[for=td],
+#tn:focus-visible~nav label[for=tn]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
 /* Mode buttons */
 .modes{display:flex;gap:6px;margin-bottom:12px}
-.modes button{flex:1;padding:9px 6px;border:1.5px solid #ddd;border-radius:7px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#555}
-.modes button[aria-pressed=true]{border-color:#667eea;background:#667eea;color:#fff}
-.crow label{font-size:13px;color:#555;flex:1}
-.reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid #ddd;border-radius:7px;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer}
+.modes button{flex:1;padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
+.modes button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.crow label{font-size:13px;color:var(--text2);flex:1}
+.reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer}
 .reset:disabled{opacity:.5;cursor:default}
-.swatch{width:14px;height:14px;border-radius:3px;border:1px solid #bbb;background:#fff}
+.swatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);background:#fff}
 /* Power switch: a plain Toggle button without script, a switch with it */
 .power{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .power .sec{margin:0}
-.switch{padding:8px 16px;border:none;border-radius:7px;background:#667eea;color:#fff;font-weight:700;cursor:pointer}
-.js .switch{position:relative;width:58px;height:32px;padding:0;border-radius:16px;background:#c5c9d3;transition:.15s}
+.switch{padding:8px 16px;border:none;border-radius:7px;background:var(--accent);color:var(--on-accent);font-weight:700;cursor:pointer}
+.js .switch{position:relative;width:58px;height:32px;padding:0;border-radius:16px;background:var(--off);transition:.15s}
 .js .switch::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s}
-.js .switch[aria-checked=true]{background:#4caf50}
+.js .switch[aria-checked=true]{background:var(--on)}
 .js .switch[aria-checked=true]::after{left:30px}
 .js .switch-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.msg{font-size:12px;color:#a12622;min-height:16px;margin-top:4px}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.msg{font-size:12px;color:var(--bad);min-height:16px;margin-top:4px}
+.msg.good{color:var(--ok)}
+.note{font-size:12px;color:var(--muted);margin-bottom:8px}
 /* Sections */
-.sec{font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
+.sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
 .sec:first-child{margin-top:0}
 /* Generic inputs */
 .frow{display:flex;gap:8px;margin-bottom:8px}
 .field{flex:1;display:flex;flex-direction:column;gap:3px}
-.field label{font-size:12px;color:#555;font-weight:500}
-input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px}
-input:focus,select:focus{outline:none;border-color:#667eea}
-input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid #ddd;border-radius:6px;cursor:pointer}
+.field label{font-size:12px;color:var(--text2);font-weight:500}
+input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
+input:disabled{opacity:.7}
+[aria-invalid=true]{border-color:var(--bad)!important}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid var(--border);border-radius:6px;background:var(--field);cursor:pointer}
 .crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .crow input[type=text]{flex:1}
 /* Buttons */
 .btn-full:disabled{opacity:.5;cursor:default}
-.btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:#667eea;color:#fff}
-footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
+.btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--on-accent)}
+footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 </style>
 </head>
 <body>
@@ -72,9 +91,9 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
 </header>
 <div class="alert" id="alert" role="alert" hidden></div>
 
-<input type="radio" name="t" id="tc" checked>
-<input type="radio" name="t" id="td">
-<input type="radio" name="t" id="tn">
+<input type="radio" name="t" id="tc" aria-label="Control tab" checked>
+<input type="radio" name="t" id="td" aria-label="Device tab">
+<input type="radio" name="t" id="tn" aria-label="Network tab">
 <nav>
   <label for="tc">Control</label>
   <label for="td">Device</label>
@@ -111,20 +130,20 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
 
 <!-- DEVICE PANEL -->
 <div class="pane" id="pd">
-  <form action="/ctrl/config" method="post">
+  <form class="settings" action="/ctrl/config" method="post">
     <input type="hidden" name="tab" value="device">
     <div class="sec">Identity</div>
     <div class="frow">
-      <div class="field"><label>Device Name</label>
+      <div class="field"><label for="device_name">Device Name</label>
         <input type="text" name="device_name" id="device_name" maxlength="32">
       </div>
     </div>
     <div class="sec">LED Hardware</div>
     <div class="frow">
-      <div class="field"><label>LED Count</label>
-        <input type="number" name="device_led_count" id="device_led_count" min="1" max="300">
+      <div class="field"><label for="device_led_count">LED Count</label>
+        <input type="number" required name="device_led_count" id="device_led_count" min="1" max="300">
       </div>
-      <div class="field"><label>Type</label>
+      <div class="field"><label for="device_led_rgbw">Type</label>
         <select name="device_led_rgbw" id="device_led_rgbw">
           <option value="false">RGB</option>
           <option value="true">RGBW</option>
@@ -133,13 +152,13 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
     </div>
     <div class="sec">Defaults</div>
     <div class="frow">
-      <div class="field"><label>Default State</label>
+      <div class="field"><label for="default_state">Default State</label>
         <select name="default_state" id="default_state">
           <option value="false">OFF</option>
           <option value="true">ON</option>
         </select>
       </div>
-      <div class="field"><label>Default Mode</label>
+      <div class="field"><label for="default_mode">Default Mode</label>
         <select name="default_mode" id="default_mode">
           <option value="Colour">Colour</option>
           <option value="Rainbows">Rainbows</option>
@@ -148,27 +167,27 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Default Colour</label>
+      <div class="field"><label for="default_colour">Default Colour</label>
         <div class="crow">
           <input type="color" name="default_colour" id="default_colour" value="#ffffff">
-          <span style="font-size:12px;color:#888" id="default_colour_text"></span>
+          <span class="note" style="margin:0" id="default_colour_text"></span>
         </div>
       </div>
     </div>
     <div class="sec">CheerLights</div>
     <div class="frow">
-      <div class="field"><label>API URL</label>
+      <div class="field"><label for="cheerlights_url">API URL</label>
         <input type="url" name="cheerlights_url" id="cheerlights_url">
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Update Interval (s)</label>
-        <input type="number" name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
+      <div class="field"><label for="cheerlights_update_interval">Update Interval (s)</label>
+        <input type="number" required name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
       </div>
     </div>
     <div class="sec">Diagnostics</div>
     <div class="frow">
-      <div class="field"><label>Log Level (USB serial log)</label>
+      <div class="field"><label for="log_level">Log Level (USB serial log)</label>
         <select name="log_level" id="log_level">
           <option value="0">Warnings and errors</option>
           <option value="1">Info</option>
@@ -176,36 +195,38 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
         </select>
       </div>
     </div>
-    <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
+    <button type="submit" class="btn-full save" disabled>Save</button>
+    <p class="msg" role="status" aria-live="polite"></p>
   </form>
 </div>
 
 <!-- NETWORK PANEL -->
 <div class="pane" id="pn">
-  <form action="/ctrl/config" method="post">
+  <form class="settings" action="/ctrl/config" method="post">
     <input type="hidden" name="tab" value="network">
     <div class="sec">WiFi</div>
     <div class="frow">
-      <div class="field"><label>SSID (from provisioning)</label>
-        <input type="text" id="ssid" disabled>
+      <div class="field"><label for="ssid">Network (SSID)</label>
+        <input type="text" id="ssid" aria-describedby="wifi_help" disabled>
+      </div>
+    </div>
+    <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its setup hotspot.</p>
+    <div class="frow">
+      <div class="field"><label for="connect_timeout">Connect Timeout (s)</label>
+        <input type="number" required name="connect_timeout" id="connect_timeout" min="5">
+      </div>
+      <div class="field"><label for="reconnect_wait">Reconnect Wait (s)</label>
+        <input type="number" required name="reconnect_wait" id="reconnect_wait" min="5">
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Connect Timeout (s)</label>
-        <input type="number" name="connect_timeout" id="connect_timeout" min="5">
-      </div>
-      <div class="field"><label>Reconnect Wait (s)</label>
-        <input type="number" name="reconnect_wait" id="reconnect_wait" min="5">
-      </div>
-    </div>
-    <div class="frow">
-      <div class="field"><label>Max Retries (0=unlimited)</label>
-        <input type="number" name="max_retries" id="max_retries" min="0">
+      <div class="field"><label for="max_retries">Max Retries (0=unlimited)</label>
+        <input type="number" required name="max_retries" id="max_retries" min="0">
       </div>
     </div>
     <div class="sec">MQTT</div>
     <div class="frow">
-      <div class="field"><label>Enabled</label>
+      <div class="field"><label for="mqtt_enabled">Enabled</label>
         <select name="mqtt_enabled" id="mqtt_enabled">
           <option value="false">No</option>
           <option value="true">Yes</option>
@@ -213,23 +234,23 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Broker Address</label>
+      <div class="field"><label for="broker_address">Broker Address</label>
         <input type="text" name="broker_address" id="broker_address">
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Username</label>
+      <div class="field"><label for="mqtt_user">Username</label>
         <input type="text" name="mqtt_user" id="mqtt_user">
       </div>
-      <div class="field"><label>Password</label>
-        <input type="password" name="mqtt_password" placeholder="leave blank to keep">
+      <div class="field"><label for="mqtt_password">Password</label>
+        <input type="password" name="mqtt_password" id="mqtt_password" placeholder="leave blank to keep">
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Queue Length</label>
-        <input type="number" name="queue_len" id="queue_len" min="1">
+      <div class="field"><label for="queue_len">Queue Length</label>
+        <input type="number" required name="queue_len" id="queue_len" min="1">
       </div>
-      <div class="field"><label>Clean Session</label>
+      <div class="field"><label for="clean">Clean Session</label>
         <select name="clean" id="clean">
           <option value="true">Yes</option>
           <option value="false">No</option>
@@ -237,7 +258,7 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
       </div>
     </div>
     <div class="frow">
-      <div class="field"><label>Home Assistant Discovery</label>
+      <div class="field"><label for="ha_discovery">Home Assistant Discovery</label>
         <select name="ha_discovery" id="ha_discovery">
           <option value="false">No</option>
           <option value="true">Yes</option>
@@ -246,18 +267,19 @@ footer{font-size:11px;color:#bbb;text-align:center;padding:10px 0 14px}
     </div>
     <div class="sec">Web Access</div>
     <div class="frow">
-      <div class="field"><label>Password (<span id="web_password_state">none set</span>)</label>
-        <input type="password" name="web_password" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
+      <div class="field"><label for="web_password">Password (<span id="web_password_state">none set</span>)</label>
+        <input type="password" name="web_password" id="web_password" aria-describedby="web_password_help" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
       </div>
-      <div class="field"><label>Remove Password</label>
-        <select name="web_password_clear">
+      <div class="field"><label for="web_password_clear">Remove Password</label>
+        <select name="web_password_clear" id="web_password_clear">
           <option value="false">No</option>
           <option value="true">Yes</option>
         </select>
       </div>
     </div>
-    <p style="font-size:12px;color:#888">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
-    <button type="submit" class="btn-full save" disabled>Save &amp; Restart</button>
+    <p class="note" id="web_password_help">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
+    <button type="submit" class="btn-full save" disabled>Save</button>
+    <p class="msg" role="status" aria-live="polite"></p>
   </form>
 </div>
 
@@ -274,6 +296,7 @@ var info = null;
 var defaultColour = null;  // from /api/config
 var colourSending = false, pendingColour = null;
 var modeButtons = document.querySelectorAll('.modes button');
+var restarting = false;  // after a save that restarts the device
 
 function post(path, body) {
   return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
@@ -304,7 +327,6 @@ function render(i) {
   document.title = i.name;
   el('name').textContent = i.name;
   el('footer_name').textContent = i.name;
-  if (!el('device_name').value) el('device_name').value = i.name;
   el('footer_info').textContent = '\u2022 v' + i.version + ' \u2022 up ' + duration(i.uptime_s) +
     ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
   var st = el('state');
@@ -354,6 +376,7 @@ function showAlert(text) {
 }
 
 function refresh() {
+  if (restarting) return;
   return fetch('/api/info')
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(render)
@@ -417,6 +440,93 @@ refresh();
 setInterval(function () { if (!document.hidden) refresh(); }, 3000);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
 
+// Settings forms. Settings in LIVE apply at once; changing any other one
+// restarts the device, and the Save button says so before it's pressed.
+var LIVE = ['tab', 'default_state', 'default_mode', 'default_colour', 'cheerlights_url',
+  'cheerlights_update_interval', 'log_level', 'web_password', 'web_password_clear'];
+var settingsForms = document.querySelectorAll('form.settings');
+
+function fields(f) {
+  return Array.prototype.filter.call(f.elements, function (e) { return e.name && e.type !== 'submit'; });
+}
+function remember(f) {
+  fields(f).forEach(function (e) { e.dataset.saved = e.value; });
+  showSave(f);
+}
+function needsRestart(f) {
+  return fields(f).some(function (e) { return LIVE.indexOf(e.name) < 0 && e.value !== e.dataset.saved; });
+}
+function showSave(f) {
+  f.querySelector('.save').textContent = needsRestart(f) ? 'Save & Restart' : 'Save';
+}
+
+// Wait until the device answers again with a fresh uptime, then reload.
+function waitForRestart(msg) {
+  var start = Date.now();
+  restarting = true;
+  function poll() {
+    var waited = (Date.now() - start) / 1000;
+    if (waited > 60) msg.textContent = 'Still restarting. This is taking longer than usual; reload the page once the lights respond.';
+    fetch('/api/info', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function (i) {
+        if (i.uptime_s <= (Date.now() - start) / 1000 + 1) location.reload();
+        else setTimeout(poll, 1500);
+      })
+      .catch(function () { setTimeout(poll, 1500); });
+  }
+  setTimeout(poll, 2000);
+}
+
+settingsForms.forEach(function (f) {
+  f.addEventListener('input', function () { showSave(f); });
+  f.addEventListener('change', function () { showSave(f); });
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = f.querySelector('.msg'), btn = f.querySelector('.save');
+    fields(f).forEach(function (x) { x.removeAttribute('aria-invalid'); });
+    msg.className = 'msg good';
+    msg.textContent = 'Saving…';
+    btn.disabled = true;
+    fetch(f.action, { method: 'POST', headers: { 'Accept': 'application/json' }, body: new URLSearchParams(new FormData(f)) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok || !j.success) throw new Error(j.error || ('HTTP ' + r.status));
+          return j;
+        });
+      })
+      .then(function (j) {
+        if (j.restart) {
+          msg.textContent = 'Saved. Restarting the device…';
+          waitForRestart(msg);
+          return;
+        }
+        msg.textContent = 'Saved.';
+        if (f.elements.default_colour) {
+          defaultColour = f.elements.default_colour.value;
+          el('default_colour_text').textContent = defaultColour;
+          showDefault();
+        }
+        if (f.elements.web_password) {
+          if (f.elements.web_password_clear.value === 'true') el('web_password_state').textContent = 'none set';
+          else if (f.elements.web_password.value) el('web_password_state').textContent = 'set';
+          f.elements.web_password.value = '';
+          f.elements.web_password_clear.value = 'false';
+        }
+        remember(f);
+        btn.disabled = false;
+      })
+      .catch(function (err) {
+        msg.className = 'msg';
+        msg.textContent = 'Not saved: ' + err.message;
+        // Errors start with the setting's name: point at that field.
+        var bad = f.elements[(/^\w+/.exec(err.message) || [''])[0]];
+        if (bad && bad.focus) { bad.setAttribute('aria-invalid', 'true'); bad.focus(); }
+        btn.disabled = false;
+      });
+  });
+});
+
 fetch('/api/config')
   .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(function (cfg) {
@@ -426,6 +536,7 @@ fetch('/api/config')
     defaultColour = colour;
     showDefault();
     el('default_colour_text').textContent = colour;
+    el('device_name').value = dev.device_name;
     el('device_led_count').value = dev.device_led_count;
     sel('device_led_rgbw', !!dev.device_led_rgbw);
     sel('default_state', !!dev.default_state);
@@ -444,7 +555,7 @@ fetch('/api/config')
     sel('clean', !!mq.clean);
     sel('ha_discovery', !!mq.ha_discovery);
     el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';
-    document.querySelectorAll('.save').forEach(function (b) { b.disabled = false; });
+    settingsForms.forEach(function (f) { remember(f); f.querySelector('.save').disabled = false; });
   })
   .catch(function (e) { showAlert('Could not load the settings (' + e.message + '). Reload to try again.'); });
 </script>

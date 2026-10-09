@@ -112,7 +112,8 @@ def test_log_level_is_saved_and_checked(api):
     assert api.save_config({'device': {'log_level': 3}}) == (False, 'log_level must be 0, 1 or 2')
     assert api.save_config({'device': {'log_level': 0}}) == (True, None)
     assert saved_config(api)['device']['log_level'] == 0
-    assert api.get_config()['device']['log_level'] == 1  # the running level changes on restart
+    assert api.get_config()['device']['log_level'] == 0  # applied at once, no restart
+    api.save_config({'device': {'log_level': 1}})
 
 
 def test_info_reports_health(api):
@@ -132,3 +133,40 @@ def test_info_reports_mqtt_problems(api):
     api.mqtt_client = Client()
     api.mqtt_error = "(-1, 'CONNACK reason code 0x5'). Check the MQTT user and password."
     assert api.get_device_info()['mqtt'] == {'enabled': True, 'connected': False, 'error': api.mqtt_error}
+
+
+def test_live_settings_apply_without_a_restart(api):
+    assert api.save_config({'device': {'default_mode': 'Rainbows', 'cheerlights_update_interval': 120,
+                                       'mode_parameters': {'Colour': '#00ff00'}}}) == (True, None)
+    assert api.device_config.default_mode == 'Rainbows'
+    assert api.device_config.cheerlights_update_interval == 120
+    assert api.device_config.mode_parameters == {'Colour': '#00ff00'}
+    assert not api.restart_required()
+
+
+def test_log_level_applies_at_once(api):
+    from log import Log
+    api.save_config({'device': {'log_level': 2}})
+    assert Log.level == 2
+    api.save_config({'device': {'log_level': 1}})
+    assert Log.level == 1
+
+
+@pytest.mark.parametrize('updates', [
+    {'device': {'device_led_count': 50}},
+    {'wlan': {'reconnect_wait': 45}},
+    {'mqtt': {'broker_address': 'mqtt.local'}},
+])
+def test_boot_only_settings_need_a_restart(api, updates):
+    api.save_config(updates)
+    assert api.restart_required()
+
+
+def test_saving_unchanged_boot_settings_needs_no_restart(api):
+    api.save_config({'device': {'device_led_count': 49}, 'wlan': {'reconnect_wait': api.device_config.wlanconfig.reconnect_wait}})
+    assert not api.restart_required()
+
+
+def test_a_rename_needs_a_restart(api):
+    assert api.set_device_name('kitchen')
+    assert api.restart_required()
