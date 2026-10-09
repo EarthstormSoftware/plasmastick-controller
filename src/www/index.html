@@ -617,6 +617,10 @@ settingsForms.forEach(function (f) {
 });
 
 document.querySelectorAll('form.reset-form').forEach(function (f) {
+  // Without script, a required tick box confirms the reset. With script it's
+  // hidden and confirm() asks instead, so skip the form's own check: a hidden
+  // required field would stop the submit silently.
+  f.noValidate = true;
   f.addEventListener('submit', function (e) {
     e.preventDefault();
     if (!confirm(f.dataset.confirm)) return;
