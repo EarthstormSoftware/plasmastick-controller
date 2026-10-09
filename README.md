@@ -7,7 +7,10 @@ API, MQTT, or the button on the board.
 ## Features
 
 - Lighting modes: a single **Colour**, **Rainbows**, and **CheerLights** (follows the global
-  [CheerLights](https://cheerlights.com) colour).
+  [CheerLights](https://cheerlights.com) colour). CheerLights polls `device.cheerlights_url` (default
+  `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
+  entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for
+  `https://`.
 - Wi-Fi setup without editing files: on first boot the device opens a `PlasmaStick-SETUP` access point for 10
   minutes. Join it, then open **`http://192.168.4.1`** in a browser. Pick your network from the list (or type the
   name of a hidden one), enter its password and choose Save & Connect; the device restarts onto your network. Some
@@ -142,6 +145,14 @@ on the next connection.
 - Phones don't reliably show a "Sign in to network" prompt for the setup access point. A Samsung phone on Android 16
   checked the access point's DNS with made-up names and then never sent its connectivity check, so open
   `http://192.168.4.1` yourself.
+- CheerLights over `https://` works, but isn't reliable on this board, so plain `http://` is the default and the
+  recommendation:
+  - A TLS connection needs an unbroken block of about 16 KB of memory. As the heap fragments, that runs out even
+    with plenty free in total: in a 6-minute test with a fetch every 20 s, 15 of 21 fetches worked, and the last 6
+    in a row failed. The firmware collects garbage and retries once, and a failed fetch keeps the current colour.
+  - Each TLS handshake holds the processor for about 0.55-0.9 s, pausing the web UI, MQTT and the LEDs.
+  - The server's certificate isn't checked, so HTTPS here hides the colour from eavesdroppers but doesn't prove
+    who sent it.
 
 ### Raising Issues
 
