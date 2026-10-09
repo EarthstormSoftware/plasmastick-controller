@@ -129,3 +129,25 @@ def test_brightness_spans_the_visible_range():
     assert inputs == sorted(inputs) and len(set(inputs)) == 100  # every step is a change
     assert inputs[0] == 22  # the dimmest value the driver doesn't turn to 0
     assert inputs[-1] == 255
+
+
+@pytest.mark.parametrize('payload, shown', [
+    ({'created_at': 'x', 'entry_id': 1, 'field2': '#fdf5e6'}, '#fdf5e6'),
+    ({'field2': 'ff0000'}, '#ff0000'),         # without the '#'
+    ({'channel': {}, 'feeds': [{'field2': '#00ff00'}]}, '#123456'),  # a history feed: not used
+    ({'field2': 'purple'}, '#123456'),
+    ({}, '#123456'),
+    (['#ff0000'], '#123456'),
+])
+def test_cheerlights_only_uses_a_valid_colour(tmp_path, monkeypatch, payload, shown):
+    monkeypatch.chdir(tmp_path)
+    import asynchttp
+    strip = LedStrip(DeviceConfig.loadConfigFromFile())
+    strip.current_state, strip.current_mode, strip.current_colour = True, 'CheerLights', '#123456'
+
+    async def fake_get_json(url):
+        return payload
+
+    monkeypatch.setattr(asynchttp, 'get_json', fake_get_json)
+    asyncio.run(strip._fetch_cheerlights())
+    assert strip.current_colour == shown

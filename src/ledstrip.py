@@ -179,7 +179,14 @@ class LedStrip:
         try:
             Log.debug(TAG, 'Requesting URL: {}'.format(self.device_config.cheerlights_url))
             payload = await asynchttp.get_json(self.device_config.cheerlights_url)
-            hex_colour = payload.get('field2', '#ffffff')
+            hex_colour = payload.get('field2') if isinstance(payload, dict) else None
+            if not is_valid_colour(hex_colour):
+                # Not a "latest entry" feed (or an empty one): keep what's showing
+                # rather than guess.
+                Log.warn(TAG, 'CheerLights reply has no usable colour in field2; keeping the current colour')
+                return
+            if not hex_colour.startswith('#'):
+                hex_colour = '#' + hex_colour
             # The strip may have been switched off or changed mode while waiting.
             if not (self.current_state and self.current_mode == 'CheerLights'):
                 return
