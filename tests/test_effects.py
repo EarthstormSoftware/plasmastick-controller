@@ -1,4 +1,5 @@
 import asyncio
+import random
 import json
 
 import pytest
@@ -127,3 +128,53 @@ def test_unusable_saved_layout_falls_back_to_bottle(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / 'config.json').write_text(json.dumps({'device': {'led_layout': 'spiral'}}))
     assert DeviceConfig.loadConfigFromFile().led_layout == 'bottle'
+
+
+def run(effect, n, frames, output=1.0):
+    strip = Strip(n)
+    for _ in range(frames):
+        effect.frame(strip, output)
+    return strip.pixels
+
+
+def test_flame_colours_are_warm():
+    for h in range(256):
+        r, g, b = effects.heat_rgb(h)
+        assert r >= g >= b and b <= 96, (h, (r, g, b))
+
+
+@pytest.mark.parametrize('layout', ['bottle', 'horizontal', 'vertical'])
+def test_fire_only_shows_warm_colours(layout):
+    random.seed(1)
+    fire = effects.Fire(49, layout, False)
+    for _ in range(60):
+        for r, g, b in run(fire, 49, 1):
+            assert r >= g >= b
+
+
+@pytest.mark.parametrize('layout', ['bottle', 'horizontal'])
+def test_embers_never_go_dark(layout):
+    random.seed(2)
+    fire = effects.Fire(49, layout, False)
+    for _ in range(200):
+        assert all(r > 0 for r, _, _ in run(fire, 49, 1, light_output(1)))
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_vertical_flames_are_hottest_at_the_bottom(reverse):
+    random.seed(3)
+    n = 40
+    fire = effects.Fire(n, 'vertical', reverse)
+    totals = [0] * n
+    for _ in range(300):
+        for i, (r, g, b) in enumerate(run(fire, n, 1)):
+            totals[i] += r + g
+    bottom, top = sum(totals[:10]), sum(totals[-10:])
+    assert (top > 2 * bottom) if reverse else (bottom > 2 * top)
+
+
+def test_horizontal_flames_move_along_the_strip():
+    random.seed(4)
+    fire = effects.Fire(49, 'horizontal', False)
+    first = list(run(fire, 49, 1))
+    assert run(fire, 49, 30) != first
