@@ -12,7 +12,9 @@
 - Connectivity ownership: `wlan.py` manages WLAN lifecycle and connection state transitions.
 - MQTT ownership: `main.py` wraps `mqtt_as.MQTTClient` and only connects/reconnects when WLAN is healthy.
 - Device control boundaries:
-  - `ledstrip.py`: strip state/mode behavior and effects.
+  - `ledstrip.py`: strip state/mode behavior.
+  - `effects.py`: the animated modes, one class per mode, imported only when one runs. Frames use whole numbers and
+    preallocated buffers (no per-frame allocation).
   - `picoled.py`: onboard status LED behavior.
   - `devicebutton.py`: local physical button behavior.
   - `api.py`, `httpserver.py`: HTTP API. `www/index.html`: the web UI, a static page streamed from flash that loads its values from `/api/info` and `/api/config` (keep it that way rather than building HTML in Python, to save heap).

@@ -4,7 +4,7 @@ import ujson
 import machine
 import network
 from log import Log
-from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, is_valid_brightness, mqtt_topics
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, is_valid_brightness, mqtt_topics
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -17,7 +17,7 @@ TAG = "API"
 # Device settings that are read where they're used, so a save applies them at
 # once. Everything else is only read at boot and needs a restart.
 LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
-                    'cheerlights_url', 'cheerlights_update_interval', 'log_level')
+                    'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse')
 
 
 def restart_settings(cfg):
@@ -167,6 +167,8 @@ class DeviceAPI:
                 'cheerlights_url': dc.cheerlights_url,
                 'cheerlights_update_interval': dc.cheerlights_update_interval,
                 'log_level': dc.log_level,
+                'led_layout': dc.led_layout,
+                'led_reverse': dc.led_reverse,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -251,6 +253,12 @@ class DeviceAPI:
                     return False, 'cheerlights_update_interval must be >= 10'
                 cfg['device']['cheerlights_update_interval'] = v
 
+            if 'led_layout' in dev:
+                if dev['led_layout'] not in LED_LAYOUTS:
+                    return False, 'led_layout must be one of ' + ', '.join(LED_LAYOUTS)
+                cfg['device']['led_layout'] = dev['led_layout']
+            if 'led_reverse' in dev:
+                cfg['device']['led_reverse'] = bool(dev['led_reverse'])
             if 'log_level' in dev:
                 v = int(dev['log_level'])
                 if v not in (0, 1, 2):

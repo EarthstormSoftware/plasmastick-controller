@@ -11,6 +11,9 @@ API, MQTT, or the button on the board.
   `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
   entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for
   `https://`.
+- The animations follow the LED layout (Device tab, `device.led_layout`): `bottle` (LEDs jumbled, the default),
+  `horizontal` or `vertical` strip. `device.led_reverse` flips a strip: a vertical strip's first LED (nearest the
+  controller) is then the top, and a horizontal strip's patterns travel the other way.
 - Wi-Fi setup without editing files: on first boot the device opens a `PlasmaStick-SETUP` access point for 10
   minutes. Join it, then open **`http://192.168.4.1`** in a browser. Pick your network from the list (or type the
   name of a hidden one), enter its password and choose Save & Connect; the device restarts onto your network. Some
@@ -117,7 +120,7 @@ With MQTT enabled (MQTT tab, or `mqtt` in `config.json`), the device uses these 
 | Topic | Direction | Contents |
 |---|---|---|
 | `<base>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}`, `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` or `{"MessageType": "BrightnessChange", "Parameters": {"Brightness": 40}}` (percent, 1-100) |
-| `<base>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}, "Brightness": 100}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
+| `<base>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}, "Brightness": 100}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in the animated modes |
 | `<base>/status` | from the device, retained | `online` while connected. The broker sets `offline` (the MQTT will) if the device drops off |
 | `<base>/info` | from the device, retained | `{"version": "1.1.0", "uptime_s": 3600, "rssi": -58, "ip": "192.168.1.20", "mem_free": 86208}`: the device's health, as in `/api/info`, on connecting and every minute |
 

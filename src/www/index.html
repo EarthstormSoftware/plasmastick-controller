@@ -84,6 +84,8 @@ summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-
 /* With MQTT off there's nothing else to set */
 form:has(#mqtt_enabled:not(:checked)) .mqtt-more{display:none}
 form:has(#mqtt_enabled:checked) .mqtt-off{display:none}
+/* A bottle has no direction */
+form:has(#led_layout option[value=bottle]:checked) .strip-only{display:none}
 .noscript{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px}
 .field{flex:1;display:flex;flex-direction:column;gap:3px}
 .field label{font-size:12px;color:var(--text2);font-weight:500}
@@ -176,6 +178,17 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
           </select>
         </div>
       </div>
+      <div class="frow">
+        <div class="field"><label for="led_layout">Layout</label>
+          <select name="device.led_layout" id="led_layout" aria-describedby="layout_help">
+            <option value="bottle">Bottle</option>
+            <option value="horizontal">Horizontal strip</option>
+            <option value="vertical">Vertical strip</option>
+          </select>
+        </div>
+      </div>
+      <label class="check strip-only"><input type="checkbox" name="device.led_reverse" id="led_reverse"> Reverse direction</label>
+      <p class="note" id="layout_help">Shapes the animations. On a vertical strip the first LED (nearest the controller) is the bottom unless reversed.</p>
     </div>
     <div class="group">
       <div class="sec">At Power-up</div>
@@ -559,7 +572,8 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // Settings in LIVE apply at once; changing any other one restarts the device,
 // and the Save button says so before it's pressed.
 var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
-  'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'web.password', 'web.clear_password'];
+  'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
+  'device.led_reverse', 'web.password', 'web.clear_password'];
 var settingsForms = document.querySelectorAll('form.settings');
 
 function fields(f) {

@@ -270,3 +270,12 @@ def test_every_settings_field_on_the_page_is_a_config_setting(api):
         for key in name.split('.'):
             assert isinstance(value, dict) and key in value, name
             value = value[key]
+
+
+def test_led_layout_is_saved_checked_and_applied_live(api):
+    assert api.save_config({'device': {'led_layout': 'vertical', 'led_reverse': True}}) == (True, None)
+    assert (api.device_config.led_layout, api.device_config.led_reverse) == ('vertical', True)
+    assert api.get_config()['device']['led_layout'] == 'vertical'
+    assert not api.restart_required()
+    assert api.save_config({'device': {'led_layout': 'spiral'}}) == (
+        False, 'led_layout must be one of bottle, horizontal, vertical')

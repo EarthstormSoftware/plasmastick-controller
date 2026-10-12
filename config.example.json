@@ -9,7 +9,9 @@
         "default_brightness": 66,
         "cheerlights_url": "http://api.thingspeak.com/channels/1417/field/2/last.json",
         "cheerlights_update_interval": 120,
-        "log_level": 1
+        "log_level": 1,
+        "led_layout": "bottle",
+        "led_reverse": false
     },
     "wlan": {
         "ssid": "",

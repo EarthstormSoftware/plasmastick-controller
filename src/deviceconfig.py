@@ -25,6 +25,10 @@ _DEFAULT_CONFIG = {
         "cheerlights_update_interval": 60,
         # 0 = warnings and errors, 1 = also info, 2 = also debug
         "log_level": 1,
+        # How the LEDs are laid out, for the animations: see LED_LAYOUTS.
+        # led_reverse flips a strip (vertical: the first LED is at the top).
+        "led_layout": "bottle",
+        "led_reverse": False,
     },
     "wlan": {
         "ssid": "",
@@ -55,6 +59,7 @@ _DEFAULT_CONFIG = {
 
 
 DEVICE_NAME_FILE = "device_name.json"
+LED_LAYOUTS = ("bottle", "horizontal", "vertical")
 RETIRED_TOPICS_FILE = "retired_topics.json"
 
 
@@ -167,6 +172,11 @@ class DeviceConfig:
         if self.log_level not in (0, 1, 2):
             Log.warn(TAG, f'Ignoring log_level {self.log_level!r}; it must be 0, 1 or 2')
             self.log_level = 1
+        self.led_layout = configdata["device"]["led_layout"]
+        if self.led_layout not in LED_LAYOUTS:
+            Log.warn(TAG, f'Ignoring led_layout {self.led_layout!r}; it must be one of {", ".join(LED_LAYOUTS)}')
+            self.led_layout = "bottle"
+        self.led_reverse = bool(configdata["device"]["led_reverse"])
         self.default_brightness = configdata["device"]["default_brightness"]
         if not is_valid_brightness(self.default_brightness):
             Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')

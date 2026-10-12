@@ -7,8 +7,10 @@ from deviceconfig import DEFAULT_COLOUR
 
 TAG = "LEDS"
 
+# The animated modes, drawn by effects.py (its EFFECTS has the same names).
+EFFECT_MODES = ('Rainbows',)
 # The lighting modes the strip supports.
-MODES = ('Colour', 'CheerLights', 'Rainbows')
+MODES = ('Colour', 'CheerLights') + EFFECT_MODES
 
 _HEX_DIGITS = '0123456789abcdefABCDEF'
 
@@ -64,12 +66,11 @@ class LedStrip:
         # Cheerlights specific data
         self.cheerlights_last_update = 0
         
-        # Rainbows specific data
-        self.rainbows_speed = 5
-        self.rainbows_update = 60
-        self.rainbows_offset = 0.0
-        self._rainbows_sleep_ms = int(1000 / self.rainbows_update)
-        
+        # The running animation (see effects.py), and the layout it was made for.
+        self._effect = None
+        self._effect_layout = None
+        self._effect_reverse = None
+
         # Cache for hex color conversion
         self._cached_hex_colour = None
         self._cached_rgb = (255, 255, 255)
@@ -78,7 +79,7 @@ class LedStrip:
         self._cheerlights_task = None
 
         # The colour actually showing ('#rrggbb'), for state reports. None in
-        # Rainbows mode, or before CheerLights has fetched one.
+        # the animated modes, or before CheerLights has fetched one.
         self.current_colour = None
         # Set whenever what's showing changes, so state can be published.
         self.changed = asyncio.Event()
@@ -88,7 +89,7 @@ class LedStrip:
         self._dirty = True
 
         # Brightness in percent, applied by scaling every colour painted. A change
-        # only repaints: it doesn't restart Rainbows or refetch CheerLights.
+        # only repaints: it doesn't restart an animation or refetch CheerLights.
         self.brightness = device_config.default_brightness
         self._output = light_output(self.brightness)
         self._repaint = False
@@ -198,6 +199,17 @@ class LedStrip:
         except Exception as e:
             Log.warn(TAG, 'CheerLights update failed: {!r}'.format(e))
 
+    def _animation(self):
+        """The effect for the current mode, made afresh after a mode change or
+        when the LED layout setting changes (it applies without a restart)."""
+        dc = self.device_config
+        if self._effect is None or dc.led_layout != self._effect_layout or dc.led_reverse != self._effect_reverse:
+            import effects
+            reverse = dc.led_reverse and dc.led_layout != 'bottle'
+            self._effect = effects.EFFECTS[self.current_mode](dc.device_led_count, dc.led_layout, reverse)
+            self._effect_layout, self._effect_reverse = dc.led_layout, dc.led_reverse
+        return self._effect
+
     async def controller(self):        
         while True:
             try:
@@ -219,15 +231,12 @@ class LedStrip:
                     if self.current_mode == 'Colour':
                         parms = self.mode_parameters if isinstance(self.mode_parameters, dict) else {}
                         self.current_colour = parms.get('Colour', DEFAULT_COLOUR)
-                    elif self.current_mode == 'Rainbows':
+                    elif self.current_mode != 'CheerLights':
                         self.current_colour = None
                     # CheerLights keeps the last fetched colour until a new one arrives.
                     self.changed.set()
                     self.cheerlights_last_update = 0
-                    self.rainbows_speed = 5
-                    self.rainbows_update = 60
-                    self.rainbows_offset = 0.0
-                    self._rainbows_sleep_ms = int(1000 / self.rainbows_update)
+                    self._effect = None  # animations start afresh
 
                 # If the light is on, update            
                 if self.current_state:
@@ -250,17 +259,9 @@ class LedStrip:
                                 self._cheerlights_task = asyncio.create_task(self._fetch_cheerlights())
                         await asyncio.sleep_ms(100)
 
-                    # Pretty Rainbows
-                    elif self.current_mode == 'Rainbows':
-                        self.rainbows_speed = min(255, max(1, self.rainbows_speed))
-                        self.rainbows_offset += float(self.rainbows_speed) / 2000.0
-
-                        value = self._output
-                        for i in range(self.device_config.device_led_count):
-                            hue = float(i) / self.device_config.device_led_count
-                            self.led_strip.set_hsv(i, hue + self.rainbows_offset, 1.0, value)
-
-                        await asyncio.sleep_ms(self._rainbows_sleep_ms)
+                    # Animations: one frame, then wait as long as the effect asks
+                    elif self.current_mode in EFFECT_MODES:
+                        await asyncio.sleep_ms(self._animation().frame(self.led_strip, self._output))
 
                     else:
                         await asyncio.sleep_ms(100)
