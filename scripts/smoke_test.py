@@ -195,8 +195,11 @@ def test_mqtt(dev, config, args):
 
     client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id=f'smoke-test-{os.getpid()}')
     client.on_message = lambda _c, _u, m: seen.__setitem__(m.topic, m.payload.decode('utf-8', 'replace'))
-    if mqtt.get('user'):
-        client.username_pw_set(mqtt['user'], load_mqtt_password(args.mqtt_password))
+    # The test's own login: a device with an account of its own (whose password
+    # only the device has) is tested through another account, --mqtt-user.
+    user = args.mqtt_user or mqtt.get('user')
+    if user:
+        client.username_pw_set(user, load_mqtt_password(args.mqtt_password))
     try:
         client.connect(broker, args.mqtt_port, keepalive=30)
     except OSError as e:
@@ -371,6 +374,7 @@ def main():
     parser.add_argument('--skip-mqtt', action='store_true')
     parser.add_argument('--broker', help="Override the broker address from the device's config")
     parser.add_argument('--mqtt-port', type=int, default=1883)
+    parser.add_argument('--mqtt-user', help="MQTT user for the test's own login (default: the device's user)")
     parser.add_argument('--mqtt-password', help='MQTT password (default: local config.json or PLASMASTICK_MQTT_PASSWORD)')
     parser.add_argument('--password', default=os.environ.get('PLASMASTICK_WEB_PASSWORD'),
                         help='Web password, if one is set (default: PLASMASTICK_WEB_PASSWORD)')

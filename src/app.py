@@ -349,8 +349,13 @@ async def clock_sync():
         Log.set_start_time(Log.start_time + moved)
         if led_strip.cheerlights_last_update:
             led_strip.cheerlights_last_update += moved
+        # Local time from the new clock straight away (the scheduler refreshes it
+        # every 15 s, but its last sum used the 2021 the clock said before).
+        import clock
+        Log.utc_offset = device_api.utc_offset = clock.offset_s(time.time(), device_config.utc_offset_min,
+                                                                device_config.dst)
         if not device_api.clock_set:
-            Log.info(TAG, f'Clock set from {server} (UTC)')
+            Log.info(TAG, f'Clock set from {server}')
         device_api.clock_set = True
         wait = CLOCK_SYNC_S
 

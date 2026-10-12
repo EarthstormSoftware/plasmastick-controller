@@ -78,6 +78,10 @@ mode and brightness at the end (`RESTORED`). What it covers:
   Assistant discovery on, the discovery config advertises brightness, `ha/state` reflects the changes, and an HA
   command (`ha/set`) is applied. With discovery off, those are skipped.
 
+Devices with an MQTT user of their own (named after the device, provisioned with Mosquitto Manager) have a
+password only the device knows. Test them through a separate test account with `--mqtt-user <test user>`; its password is the
+usual one below.
+
 If MQTT fails with an authentication error, the password wasn't found. It's read from the local `config.json`
 (gitignored) or the `PLASMASTICK_MQTT_PASSWORD` environment variable. Ask the user to provide one; never print or
 commit it.
