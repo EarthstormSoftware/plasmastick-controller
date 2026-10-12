@@ -3,8 +3,8 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PlasmaStick</title>
-<!-- A bottle glowing warm white; the script below recolours it to match the lights. -->
-<link rel="icon" id="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 2h6v6l3 4v16a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12l3-4z' fill='%23ffb46b' stroke='%23333' stroke-width='1.5'/%3E%3C/svg%3E">
+<!-- A light bulb glowing warm white; the script below recolours it to match the lights. -->
+<link rel="icon" id="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2a10 10 0 0 0-5.5 18.3V23h11v-2.7A10 10 0 0 0 16 2z' fill='%23ffb46b' stroke='%23333' stroke-width='1.5'/%3E%3Crect x='10.5' y='24' width='11' height='2.5' rx='1' fill='%238c92a0'/%3E%3Crect x='12' y='27.5' width='8' height='2.5' rx='1' fill='%238c92a0'/%3E%3C/svg%3E">
 <style>
 /* Colours: text is at least 4.5:1 on its background, borders and the switch track 3:1. */
 :root{color-scheme:light dark;
@@ -591,8 +591,9 @@ function showIcon(i, on, mode) {
     fill = 'url(#g)';
   }
   el('icon').href = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    defs + '<path d="M13 2h6v6l3 4v16a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12l3-4z" fill="' + fill +
-    '" stroke="#333" stroke-width="1.5"/></svg>');
+    defs + '<path d="M16 2a10 10 0 0 0-5.5 18.3V23h11v-2.7A10 10 0 0 0 16 2z" fill="' + fill +
+    '" stroke="#333" stroke-width="1.5"/><rect x="10.5" y="24" width="11" height="2.5" rx="1" fill="#8c92a0"/>' +
+    '<rect x="12" y="27.5" width="8" height="2.5" rx="1" fill="#8c92a0"/></svg>');
 }
 
 function render(i) {
