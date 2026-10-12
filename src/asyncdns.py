@@ -10,6 +10,7 @@ import struct
 import uasyncio as asyncio
 
 DNS_PORT = 53
+RESEND_MS = 1000  # an unanswered query is sent again; the first after joining Wi-Fi can be lost
 _cache = {}
 _next_id = [1]
 
@@ -75,9 +76,11 @@ async def resolve(host, timeout_ms=3000):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.setblocking(False)
-        s.sendto(query(host, ident), (dns_server(), DNS_PORT))
+        packet, server = query(host, ident), (dns_server(), DNS_PORT)
         waited = 0
         while waited < timeout_ms:
+            if waited % RESEND_MS == 0:
+                s.sendto(packet, server)
             try:
                 reply = s.recv(512)
             except OSError:  # nothing yet

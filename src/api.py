@@ -6,7 +6,9 @@ import machine
 import network
 from log import Log
 from deviceconfig import (DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, CHRISTMAS_STYLES, is_valid_brightness,
-                          is_valid_speed, is_valid_transition, mqtt_topics)
+                          is_valid_speed, is_valid_transition, is_valid_utc_offset, is_valid_coordinate,
+                          mqtt_topics)
+import clock
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -20,7 +22,8 @@ TAG = "API"
 # once. Everything else is only read at boot and needs a restart.
 LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
                     'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse',
-                    'christmas_style', 'transition_ms', 'effect_speed')
+                    'christmas_style', 'transition_ms', 'effect_speed', 'utc_offset_min', 'dst',
+                    'latitude', 'longitude', 'schedule')
 
 
 def restart_settings(cfg):
@@ -67,6 +70,8 @@ class DeviceAPI:
         self.local_change = asyncio.Event()
         # True once app.py has set the clock from NTP (until then it says 2021).
         self.clock_set = False
+        # Seconds ahead of UTC for local time (time zone and daylight saving); app.py keeps it up to date.
+        self.utc_offset = 0
 
     def shift_clock(self, seconds):
         """The clock was just moved by seconds: keep the uptime right."""
@@ -92,11 +97,6 @@ class DeviceAPI:
             Log.error(TAG, f'Failed to save device name: {e}')
             return False
 
-    @staticmethod
-    def _now():
-        t = time.gmtime()
-        return '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z'.format(*t[:6])
-
     def get_device_info(self):
         """Return device info and health as dict."""
         gc.collect()  # so mem_free is live data, not live data plus garbage
@@ -120,7 +120,7 @@ class DeviceAPI:
             'modes': MODES,
             'led_count': self.device_config.device_led_count,
             'uptime_s': time.time() - self._started,
-            'time': self._now() if self.clock_set else None,
+            'time': clock.iso(time.time(), self.utc_offset) if self.clock_set else None,
             'wifi': {'ssid': self.device_config.wlanconfig.ssid, 'ip': sta.ifconfig()[0], 'rssi': rssi},
             'mqtt': {
                 'enabled': client is not None,
@@ -205,6 +205,11 @@ class DeviceAPI:
                 'ntp_server': dc.ntp_server,
                 'transition_ms': dc.transition_ms,
                 'effect_speed': dc.effect_speed,
+                'utc_offset_min': dc.utc_offset_min,
+                'dst': dc.dst,
+                'latitude': dc.latitude,
+                'longitude': dc.longitude,
+                'schedule': dc.schedule,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -297,6 +302,25 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'utc_offset_min' in dev:
+                if not is_valid_utc_offset(dev['utc_offset_min']):
+                    return False, 'utc_offset_min must be -720 to 840, in steps of 15'
+                cfg['device']['utc_offset_min'] = dev['utc_offset_min']
+            if 'dst' in dev:
+                if dev['dst'] not in ('none', 'eu', 'us'):
+                    return False, 'dst must be none, eu or us'
+                cfg['device']['dst'] = dev['dst']
+            for key, limit in (('latitude', 90), ('longitude', 180)):
+                if key in dev:
+                    if not is_valid_coordinate(dev[key], limit):
+                        return False, '{} must be -{} to {}, or empty'.format(key, limit, limit)
+                    cfg['device'][key] = dev[key]
+            if 'schedule' in dev:
+                import schedule
+                error = schedule.schedule_error(dev['schedule'], MODES)
+                if error:
+                    return False, error
+                cfg['device']['schedule'] = dev['schedule']
             if 'effect_speed' in dev:
                 if not is_valid_speed(dev['effect_speed']):
                     return False, 'effect_speed must be a whole number, 1-10'
@@ -399,6 +423,9 @@ class DeviceAPI:
                 self.web_password_hash = new_hash
                 self.accepted_auth = None
             self._apply_live(cfg['device'])
+            # A new time zone shows at once (the scheduler keeps it up to date after).
+            self.utc_offset = Log.utc_offset = clock.offset_s(time.time(), self.device_config.utc_offset_min,
+                                                              self.device_config.dst)
             self._retire_old_topics()
             Log.info(TAG, 'Config saved.' + (' Restart to apply it all.' if self.restart_required() else ''))
             return True, None

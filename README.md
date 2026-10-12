@@ -51,8 +51,15 @@ API, MQTT, or the button on the board.
   which is GP4), so a press pulls GP4 high. For a switch to GND instead, change `BUTTON_PULL` and `PRESSED_LEVEL` in
   `src/devicebutton.py`.
 - Clock: once Wi-Fi is up, the device sets its clock from an NTP server (`device.ntp_server`, `pool.ntp.org` by
-  default; blank turns it off) and again every 6 hours. Log times are then real (UTC); until then they count from
-  2021-01-01, as the board has no battery-backed clock. `/api/info` reports the time once it's set.
+  default; blank turns it off) and again every 6 hours. Local time comes from the time zone (`device.utc_offset_min`,
+  the standard offset in minutes) and summer time rule (`device.dst`: `none`, `eu` or `us`), all on the Schedule tab.
+  Log times are then local; until the clock is set they count from 2021-01-01, as the board has no battery-backed
+  clock. `/api/info` reports the local time, with its offset, once it's set.
+- Schedule (Schedule tab, `device.schedule`): up to 8 events, each on chosen days of the week at a time, or at sunrise
+  or sunset plus or minus some minutes, turning the lights on (optionally in a mode and at a brightness) or off.
+  Sunrise and sunset need the device's location (`device.latitude`, `device.longitude`). Events act like any other
+  change, so a group follows them. After a restart, once the clock is set, the lights do what the latest event
+  said, so a power cut doesn't leave them in the wrong state.
 - Watchdog: if the firmware stops responding (its event loop stalls for 30 s, or it hangs outright), the board's
   hardware watchdog restarts it. A slow network call doesn't count as a stall. The next boot logs how long it had
   stalled, and `/api/info` reports it as `watchdog_stall`. Ctrl-C at the USB REPL (as `mpremote` and the deploy

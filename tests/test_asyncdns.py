@@ -77,3 +77,22 @@ def test_resolve_gives_up_when_nobody_answers(monkeypatch):
     with pytest.raises(OSError, match='no DNS answer'):
         asyncio.run(asyncdns.resolve('nowhere.example', timeout_ms=200))
     quiet.close()
+
+
+def test_an_unanswered_query_is_sent_again(monkeypatch):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind(('127.0.0.1', 0))
+    monkeypatch.setattr(asyncdns, 'DNS_PORT', s.getsockname()[1])
+    monkeypatch.setattr(asyncdns, 'dns_server', lambda: '127.0.0.1')
+    monkeypatch.setattr(asyncdns, 'RESEND_MS', 200)
+    asyncdns._cache.clear()
+
+    def serve():
+        s.recvfrom(512)  # the first query is lost
+        data, addr = s.recvfrom(512)
+        ident = struct.unpack('!H', data[:2])[0]
+        s.sendto(reply(ident, [(1, bytes([10, 0, 0, 7]))]), addr)
+
+    threading.Thread(target=serve, daemon=True).start()
+    assert asyncio.run(asyncdns.resolve('late.example', timeout_ms=1000)) == '10.0.0.7'
+    s.close()

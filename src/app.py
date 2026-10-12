@@ -312,7 +312,7 @@ async def publish_state(client):
 async def down(client):
     while True:
         await client.down.wait()  # Pause until connectivity changes
-        client.down.clear()        
+        client.down.clear()
         Log.warn(TAG,'WiFi or broker is down.')
 
 HEAP_LOG_INTERVAL_S = 300
@@ -335,7 +335,7 @@ async def clock_sync():
             moved = ntp.set_clock(await ntp.fetch(server))
         except (OSError, ValueError) as e:
             Log.warn(TAG, f'Could not set the clock from {server}: {e}')
-            wait = 600 if device_api.clock_set else 60
+            wait = 600 if device_api.clock_set else 15  # DNS can take a moment after joining Wi-Fi
             continue
         # Things timed by the clock move with it, so uptime and intervals stay right.
         device_api.shift_clock(moved)
@@ -346,6 +346,59 @@ async def clock_sync():
             Log.info(TAG, f'Clock set from {server} (UTC)')
         device_api.clock_set = True
         wait = CLOCK_SYNC_S
+
+SCHEDULE_CHECK_S = 15
+
+def run_event(ev):
+    # Through device_api, like any other change, so a group follows it too.
+    Log.info(TAG, f"Schedule: {ev['action']} ({ev['at']})")
+    if ev['action'] == 'off':
+        device_api.power_off()
+        return
+    if ev.get('mode'):
+        device_api.set_mode(ev['mode'])
+    if ev.get('brightness'):
+        device_api.set_brightness(ev['brightness'])
+    device_api.power_on()
+
+async def scheduler():
+    # Keeps local time (for the log and the API) and runs the schedule. Once
+    # the clock is first set, it catches up: the lights do what the most
+    # recent event said, so a power cut doesn't leave them in the wrong state.
+    import clock
+    last = None  # local time (seconds) of the last check
+    caught_up = False
+    zone = None
+    while True:
+        dc = device_config
+        utc = time.time()
+        offset = clock.offset_s(utc, dc.utc_offset_min, dc.dst)
+        Log.utc_offset = device_api.utc_offset = offset
+        now = utc + offset
+        if (dc.utc_offset_min, dc.dst) != zone:
+            # A new time zone setting jumps local time: carry on from the new
+            # time rather than running the events it skipped. (The clocks going
+            # forward for summer time aren't a setting change: those run.)
+            zone = (dc.utc_offset_min, dc.dst)
+            last = now
+        if device_api.clock_set and dc.schedule:
+            import schedule
+            try:
+                if not caught_up:
+                    ev = schedule.latest(dc.schedule, now, offset, dc.latitude, dc.longitude)
+                    if ev:
+                        Log.info(TAG, 'Schedule: catching up after the restart')
+                        run_event(ev)
+                else:
+                    for ev in schedule.due(dc.schedule, last, now, offset, dc.latitude, dc.longitude):
+                        run_event(ev)
+            except (KeyError, TypeError, ValueError) as e:  # a hand-edited event
+                Log.warn(TAG, f'Schedule: skipping an unusable event ({e!r})')
+            caught_up = True
+        elif device_api.clock_set:
+            caught_up = True  # an empty schedule: events added later start from now
+        last = now
+        await asyncio.sleep(SCHEDULE_CHECK_S)
 
 async def heap_monitor():
     # Logs free heap now and then, so long runs show leaks or fragmentation growth.
@@ -395,22 +448,22 @@ async def main(client):
     asyncio.create_task(led_strip.controller())
     asyncio.create_task(control_button.controller())
     asyncio.create_task(wlan.controller())
-    
+
     Log.info(TAG,'Waiting for WLAN connection before starting HTTP server')
     while not wlan.is_connected():
         await asyncio.sleep(1)
-    
+
     # Now that WLAN is up, initialize the HTTP server (deferred for memory)
     Log.info(TAG,'WLAN ready. Initialising HTTP server')
     gc.collect()  # Force garbage collection before allocating large structures
-    
+
     try:
         http_server = HTTPServer(device_api, port=80)
         gc.collect()  # Clean up any temporary allocations
     except Exception as e:
         Log.error(TAG, f'Failed to initialize HTTP server: {e}')
         return
-    
+
     Log.info(TAG,'Starting HTTP server')
     async def http_server_task():
         try:
@@ -419,13 +472,14 @@ async def main(client):
             Log.error(TAG, f'HTTP server failed: {e}')
             import traceback
             traceback.print_exc()
-    
+
     server = asyncio.create_task(http_server_task())
     await asyncio.sleep(1)
     if not server.done():  # it's still serving
         confirm_update()
     asyncio.create_task(heap_monitor())
     asyncio.create_task(clock_sync())
+    asyncio.create_task(scheduler())
     asyncio.create_task(loop_monitor())
     if device_config.watchdog:
         dog = watchdog.Watchdog()
@@ -475,4 +529,4 @@ finally:
     asyncio.new_event_loop()
     pico_led.set_state(False)
     led_strip.set_off()
-   
+

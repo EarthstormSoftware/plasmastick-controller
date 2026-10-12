@@ -39,6 +39,14 @@ _DEFAULT_CONFIG = {
         "transition_ms": 500,
         # How fast the animations run when a request doesn't say: 1-10.
         "effect_speed": 5,
+        # Local time: minutes ahead of UTC, and the daylight-saving rule (see clock.py).
+        "utc_offset_min": 0,
+        "dst": "none",
+        # Where the device is, for sunrise and sunset in the schedule; None: unset.
+        "latitude": None,
+        "longitude": None,
+        # Scheduled events (see schedule.py).
+        "schedule": [],
     },
     "wlan": {
         "ssid": "",
@@ -76,6 +84,16 @@ DEVICE_NAME_FILE = "device_name.json"
 LED_LAYOUTS = ("bottle", "horizontal", "vertical")
 CHRISTMAS_STYLES = ("Twinkle", "Fade")
 RETIRED_TOPICS_FILE = "retired_topics.json"
+
+
+def is_valid_utc_offset(value):
+    """True for a UTC offset in minutes: -12:00 to +14:00, in quarter hours."""
+    return isinstance(value, int) and not isinstance(value, bool) and -720 <= value <= 840 and value % 15 == 0
+
+
+def is_valid_coordinate(value, limit):
+    """True for None (unset) or a number from -limit to limit."""
+    return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool) and -limit <= value <= limit)
 
 
 def is_valid_speed(value):
@@ -212,6 +230,20 @@ class DeviceConfig:
         if not is_valid_speed(self.effect_speed):
             Log.warn(TAG, f'Ignoring effect_speed {self.effect_speed!r}; it must be 1-10')
             self.effect_speed = 5
+        self.utc_offset_min = configdata["device"]["utc_offset_min"]
+        if not is_valid_utc_offset(self.utc_offset_min):
+            Log.warn(TAG, f'Ignoring utc_offset_min {self.utc_offset_min!r}')
+            self.utc_offset_min = 0
+        self.dst = configdata["device"]["dst"]
+        if self.dst not in ('none', 'eu', 'us'):
+            Log.warn(TAG, f'Ignoring dst {self.dst!r}; it must be none, eu or us')
+            self.dst = 'none'
+        self.latitude, self.longitude = configdata["device"]["latitude"], configdata["device"]["longitude"]
+        if not (is_valid_coordinate(self.latitude, 90) and is_valid_coordinate(self.longitude, 180)):
+            Log.warn(TAG, 'Ignoring the location: latitude must be -90 to 90 and longitude -180 to 180')
+            self.latitude = self.longitude = None
+        # Checked when it's saved (schedule.py); a hand-edited one is checked when it runs.
+        self.schedule = configdata["device"]["schedule"] if isinstance(configdata["device"]["schedule"], list) else []
         self.transition_ms = configdata["device"]["transition_ms"]
         if not is_valid_transition(self.transition_ms):
             Log.warn(TAG, f'Ignoring transition_ms {self.transition_ms!r}; it must be 0-10000')

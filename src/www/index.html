@@ -39,12 +39,21 @@ nav label:hover{color:var(--text)}
 #tc:checked~nav label[for=tc],
 #td:checked~nav label[for=td],
 #tn:checked~nav label[for=tn],
-#tm:checked~nav label[for=tm]{color:var(--accent);border-bottom-color:var(--accent)}
-#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn,#tm:checked~#pm{display:block}
+#tm:checked~nav label[for=tm],
+#ts:checked~nav label[for=ts]{color:var(--accent);border-bottom-color:var(--accent)}
+#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn,#tm:checked~#pm,#ts:checked~#ps{display:block}
 #tc:focus-visible~nav label[for=tc],
 #td:focus-visible~nav label[for=td],
 #tn:focus-visible~nav label[for=tn],
-#tm:focus-visible~nav label[for=tm]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
+#tm:focus-visible~nav label[for=tm],
+#ts:focus-visible~nav label[for=ts]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
+/* Schedule events: a card each, their fields wrapping on a phone */
+.event{border:1.5px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.event select,.event input[type=time],.event input[type=number]{width:auto}
+.event input[type=number]{width:72px}
+.days{display:flex;gap:2px;flex-basis:100%}
+.days label{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--text2);min-width:26px}
+.event .remove{margin-left:auto}
 /* The controls keep a phone-like width; the settings use the whole card */
 #pc{max-width:540px;margin:0 auto}
 /* Mode buttons, three to a row */
@@ -127,11 +136,13 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 <input type="radio" name="t" id="td" aria-label="Device tab">
 <input type="radio" name="t" id="tn" aria-label="Network tab">
 <input type="radio" name="t" id="tm" aria-label="MQTT tab">
+<input type="radio" name="t" id="ts" aria-label="Schedule tab">
 <nav>
   <label for="tc">Control</label>
   <label for="td">Device</label>
   <label for="tn">Network</label>
   <label for="tm">MQTT</label>
+  <label for="ts">Schedule</label>
 </nav>
 
 <!-- CONTROL PANEL -->
@@ -279,12 +290,6 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         </div>
       </div>
       <label class="check"><input type="checkbox" name="device.watchdog" id="watchdog"> Restart automatically if the firmware stops responding</label>
-      <div class="frow">
-        <div class="field"><label for="ntp_server">Time Server (NTP)</label>
-          <input type="text" name="device.ntp_server" id="ntp_server" maxlength="64" placeholder="none: don't set the clock" aria-describedby="ntp_help" spellcheck="false" autocapitalize="off">
-        </div>
-      </div>
-      <p class="note" id="ntp_help">Sets the clock, for log times. Times are UTC.</p>
     </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
@@ -405,6 +410,54 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       <p class="note" id="ha_help">Home Assistant adds the light automatically (MQTT discovery). Turning this off removes it again. Only change the prefix if Home Assistant's has been changed.</p>
     </div>
     </div>
+    <button type="submit" class="btn-full save" disabled>Save</button>
+    <p class="msg" role="status" aria-live="polite"></p>
+  </form>
+</div>
+
+<!-- SCHEDULE PANEL -->
+<div class="pane" id="ps">
+  <form class="settings">
+    <div class="cols">
+    <div class="group">
+      <div class="sec">Clock</div>
+      <div class="frow">
+        <div class="field"><label for="utc_offset_min">Time Zone</label>
+          <!-- Filled in by the script: UTC-12:00 to UTC+14:00 -->
+          <select name="device.utc_offset_min" id="utc_offset_min" data-t="int"></select>
+        </div>
+        <div class="field"><label for="dst">Summer Time</label>
+          <select name="device.dst" id="dst">
+            <option value="none">None</option>
+            <option value="eu">Europe</option>
+            <option value="us">North America</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="ntp_server">Time Server (NTP)</label>
+          <input type="text" name="device.ntp_server" id="ntp_server" maxlength="64" placeholder="none: don't set the clock" aria-describedby="ntp_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="ntp_help">The time zone is the standard (winter) offset; summer time adds an hour. Europe: last Sunday of March to last Sunday of October. North America: second Sunday of March to first Sunday of November.</p>
+    </div>
+    <div class="group">
+      <div class="sec">Location</div>
+      <div class="frow">
+        <div class="field"><label for="latitude">Latitude</label>
+          <input type="number" name="device.latitude" id="latitude" min="-90" max="90" step="any" placeholder="e.g. 51.5">
+        </div>
+        <div class="field"><label for="longitude">Longitude</label>
+          <input type="number" name="device.longitude" id="longitude" min="-180" max="180" step="any" placeholder="e.g. -0.13">
+        </div>
+      </div>
+      <p class="note" id="sun_note">For sunrise and sunset events. East and north are positive.</p>
+    </div>
+    </div>
+    <div class="sec">Events</div>
+    <div id="events"></div>
+    <button type="button" class="reset" id="add_event">+ Add event</button>
+    <p class="note" style="margin-top:8px">Up to 8. Events act like any other change, so a group follows them. After a restart the lights do what the latest event said.</p>
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
   </form>
@@ -548,7 +601,7 @@ function render(i) {
   document.title = i.name;
   el('name').textContent = i.name;
   el('footer_name').textContent = i.name;
-  el('footer_info').textContent = '\u2022 v' + i.version + (i.time ? ' \u2022 ' + i.time.slice(11, 16) + ' UTC' : '') +
+  el('footer_info').textContent = '\u2022 v' + i.version + (i.time ? ' \u2022 ' + i.time.slice(11, 16) : '') +
     ' \u2022 up ' + duration(i.uptime_s) +
     ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
   var on = shown(i, 'state');
@@ -704,8 +757,8 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // and the Save button says so before it's pressed.
 var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
   'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
-  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'device.effect_speed', 'web.password',
-  'web.clear_password'];
+  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'device.effect_speed',
+  'device.utc_offset_min', 'device.dst', 'device.latitude', 'device.longitude', 'web.password', 'web.clear_password'];
 var settingsForms = document.querySelectorAll('form.settings');
 
 function fields(f) {
@@ -714,7 +767,7 @@ function fields(f) {
 // The field's value as the API has it: data-t marks drop-downs of true/false or numbers.
 function typed(e) {
   if (e.type === 'checkbox') return e.checked;
-  if (e.type === 'number' || e.dataset.t === 'int') return Number(e.value);
+  if (e.type === 'number' || e.dataset.t === 'int') return e.value === '' ? null : Number(e.value);
   if (e.dataset.t === 'bool') return e.value === 'true';
   return e.value;
 }
@@ -778,7 +831,9 @@ settingsForms.forEach(function (f) {
     msg.className = 'msg good';
     msg.textContent = 'Saving…';
     btn.disabled = true;
-    post('/api/config', collect(f))
+    var body = collect(f);
+    if (f.querySelector('#events')) body.device.schedule = readEvents();
+    post('/api/config', body)
       .then(function (j) {
         if (j.restart_required) {
           msg.textContent = 'Saved. Restarting the device…';
@@ -855,6 +910,114 @@ function showTopics() {
 }
 el('topic_base').addEventListener('input', showTopics);
 
+// Time zones, as offsets in minutes: every hour, and the half and quarter hours in use.
+[-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240, 270,
+  300, 330, 345, 360, 390, 420, 480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840].forEach(function (m) {
+  var o = document.createElement('option'), a = Math.abs(m);
+  o.value = m;
+  o.textContent = 'UTC' + (m < 0 ? '\u2212' : '+') + ('0' + Math.floor(a / 60)).slice(-2) + ':' + ('0' + a % 60).slice(-2);
+  el('utc_offset_min').appendChild(o);
+});
+
+// Schedule events: built from /api/config's device.schedule, read back on save.
+var DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+function mk(tag, props, kids) {
+  var e = document.createElement(tag);
+  for (var k in props) {
+    if (k === 'text') e.textContent = props[k];
+    else if (k.slice(0, 5) === 'aria-' || k === 'data-k') e.setAttribute(k, props[k]);
+    else e[k] = props[k];
+  }
+  (kids || []).forEach(function (c) { e.appendChild(c); });
+  return e;
+}
+function options(select, list, value) {
+  list.forEach(function (o) { select.appendChild(mk('option', { value: o[0], text: o[1] })); });
+  select.value = value;
+  return select;
+}
+function eventRow(ev) {
+  var days = mk('div', { className: 'days', 'aria-label': 'Days' }, DAY_NAMES.map(function (d, n) {
+    return mk('label', {}, [mk('input', { type: 'checkbox', checked: ev.days.indexOf(n) >= 0, 'aria-label': d }),
+      document.createTextNode(d.charAt(0))]);
+  }));
+  var sun = ev.at === 'sunrise' || ev.at === 'sunset';
+  var when = options(mk('select', { 'aria-label': 'When', 'data-k': 'when' }),
+    [['time', 'At'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset']], sun ? ev.at : 'time');
+  var time = mk('input', { type: 'time', value: sun ? '18:00' : ev.at, 'aria-label': 'Time', 'data-k': 'time' });
+  var offset = mk('input', { type: 'number', min: -180, max: 180, value: ev.offset || 0, 'aria-label': 'Minutes after (negative: before)', 'data-k': 'offset' });
+  var offsetLabel = mk('span', { className: 'note', text: 'min' });
+  function showWhen() {
+    var isSun = when.value !== 'time';
+    time.hidden = isSun;
+    offset.hidden = offsetLabel.hidden = !isSun;
+  }
+  when.addEventListener('change', showWhen);
+  var action = options(mk('select', { 'aria-label': 'Action', 'data-k': 'action' }), [['on', 'Turn on'], ['off', 'Turn off']], ev.action);
+  var modes = [['', 'Same mode']].concat((info ? info.modes : []).map(function (m) { return [m, m]; }));
+  var mode = options(mk('select', { 'aria-label': 'Mode', 'data-k': 'mode' }), modes, ev.mode || '');
+  var bright = mk('input', { type: 'number', min: 1, max: 100, placeholder: '%', value: ev.brightness || '', 'aria-label': 'Brightness (blank: unchanged)', 'data-k': 'brightness' });
+  function showAction() { mode.hidden = bright.hidden = action.value === 'off'; }
+  action.addEventListener('change', showAction);
+  var row = mk('div', { className: 'event' }, [days, when, time, offset, offsetLabel, action, mode, bright]);
+  row.appendChild(mk('button', { type: 'button', className: 'reset remove', text: 'Remove', onclick: function () {
+    row.remove();
+    el('add_event').disabled = false;
+    showSave(row.form || document.querySelector('#ps form'));
+  } }));
+  showWhen();
+  showAction();
+  return row;
+}
+function showEvents(events) {
+  el('events').textContent = '';
+  events.forEach(function (ev) { el('events').appendChild(eventRow(ev)); });
+  el('add_event').disabled = events.length >= 8;
+}
+function readEvents() {
+  return Array.prototype.map.call(el('events').children, function (row) {
+    function f(k) { return row.querySelector('[data-k=' + k + ']'); }
+    var ev = { days: [], action: f('action').value };
+    row.querySelectorAll('.days input').forEach(function (c, n) { if (c.checked) ev.days.push(n); });
+    if (f('when').value === 'time') ev.at = f('time').value;
+    else { ev.at = f('when').value; ev.offset = Number(f('offset').value) || 0; }
+    if (ev.action === 'on') {
+      if (f('mode').value) ev.mode = f('mode').value;
+      if (f('brightness').value) ev.brightness = Number(f('brightness').value);
+    }
+    return ev;
+  });
+}
+el('add_event').addEventListener('click', function () {
+  el('events').appendChild(eventRow({ days: [0, 1, 2, 3, 4, 5, 6], at: '18:00', action: 'on' }));
+  el('add_event').disabled = el('events').children.length >= 8;
+});
+
+// Today's sunrise and sunset at the location entered (the same sums as the
+// device's schedule.py), so it can be checked before saving.
+function sunTimes(lat, lon, date) {
+  var rad = Math.PI / 180, days = Math.floor(date.getTime() / 86400000);
+  var n = days - 10957 - lon / 360, m = (357.5291 + 0.98560028 * n) % 360;
+  var c = 1.9148 * Math.sin(m * rad) + 0.02 * Math.sin(2 * m * rad) + 0.0003 * Math.sin(3 * m * rad);
+  var ecl = (m + c + 180 + 102.9372) % 360;
+  var transit = 2451545 + n + 0.0053 * Math.sin(m * rad) - 0.0069 * Math.sin(2 * ecl * rad);
+  var dec = Math.asin(Math.sin(ecl * rad) * Math.sin(23.4397 * rad));
+  var ch = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
+  if (ch < -1 || ch > 1) return null;
+  var h = Math.acos(ch) / rad / 360;
+  return [transit - h, transit + h].map(function (jd) { return new Date((jd - 2440587.5) * 86400000); });
+}
+function showSun() {
+  var lat = parseFloat(el('latitude').value), lon = parseFloat(el('longitude').value), note = el('sun_note');
+  var base = 'For sunrise and sunset events. East and north are positive.';
+  if (isNaN(lat) || isNaN(lon)) { note.textContent = base; return; }
+  var t = sunTimes(lat, lon, new Date()), hm = function (d) { return d.toTimeString().slice(0, 5); };
+  note.textContent = base + (t ? ' Today here: sunrise ' + hm(t[0]) + ', sunset ' + hm(t[1]) + ' (this browser\u2019s time).'
+    : ' The sun doesn\u2019t rise or set there today.');
+}
+el('latitude').addEventListener('input', showSun);
+el('longitude').addEventListener('input', showSun);
+
 // The settings load after the first /api/info, which brings the list of modes
 // the Default Mode drop-down needs.
 function loadConfig() {
@@ -869,6 +1032,8 @@ function loadConfig() {
       showDefault(info ? shown(info, 'mode') : null);
       el('default_colour_text').textContent = colour;
       el('ssid').value = cfg.wlan.ssid;
+      showEvents(dev.schedule || []);
+      showSun();
       deviceName = dev.device_name;
       showTopics();
       el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';

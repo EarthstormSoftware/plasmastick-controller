@@ -332,7 +332,9 @@ def test_the_time_is_only_reported_once_the_clock_is_set(api):
     assert api.get_device_info()['time'] is None
     api.clock_set = True
     t = api.get_device_info()['time']
-    assert len(t) == 20 and t[4] == '-' and t[10] == 'T' and t.endswith('Z')
+    assert len(t) == 25 and t[4] == '-' and t[10] == 'T' and t.endswith('+00:00')
+    api.utc_offset = 7200  # as app.py sets it for UTC+1 with summer time
+    assert api.get_device_info()['time'].endswith('+02:00')
 
 
 def test_uptime_survives_the_clock_being_set(api):
@@ -362,3 +364,16 @@ def test_default_speed_is_checked_and_applies_live(api):
     assert api.device_config.effect_speed == 8 and not api.restart_required()
     assert api.save_config({'device': {'effect_speed': 0}}) == (False, 'effect_speed must be a whole number, 1-10')
     assert api.set_mode('Fire', {'Speed': 2}) and not api.set_mode('Fire', {'Speed': 'fast'})
+
+
+def test_time_zone_location_and_schedule_are_checked_and_apply_live(api):
+    ok = {'utc_offset_min': 60, 'dst': 'eu', 'latitude': 51.5, 'longitude': -0.13,
+          'schedule': [{'days': [0, 1, 2, 3, 4, 5, 6], 'at': 'sunset', 'offset': -15, 'action': 'on', 'mode': 'Fire'}]}
+    assert api.save_config({'device': ok}) == (True, None)
+    assert api.device_config.dst == 'eu' and api.device_config.schedule == ok['schedule']
+    assert not api.restart_required()
+    assert api.save_config({'device': {'latitude': None, 'longitude': None}}) == (True, None)  # cleared
+    for bad, why in [({'utc_offset_min': 61}, 'utc_offset_min'), ({'dst': 'au'}, 'dst'), ({'latitude': 91}, 'latitude'),
+                     ({'schedule': [{'days': [], 'at': '18:00', 'action': 'on'}]}, 'schedule event 1')]:
+        ok_, error = api.save_config({'device': bad})
+        assert not ok_ and error.startswith(why)

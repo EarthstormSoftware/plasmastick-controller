@@ -16,7 +16,12 @@
         "watchdog": true,
         "ntp_server": "pool.ntp.org",
         "transition_ms": 500,
-        "effect_speed": 5
+        "effect_speed": 5,
+        "utc_offset_min": 0,
+        "dst": "none",
+        "latitude": null,
+        "longitude": null,
+        "schedule": []
     },
     "wlan": {
         "ssid": "",
