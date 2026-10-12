@@ -188,10 +188,9 @@ class Fire:
         self._draw(strip, heat, self.reverse)
 
 
-# Water colours by level (0-255): deep navy, blue, teal, sea green, aqua, and
-# pale cyan at the top for light catching the surface.
+# Water colours by level (0-255): deep navy, blue, teal, sea green, aqua.
 _OCEAN_STOPS = ((0, (0, 8, 40)), (80, (0, 40, 140)), (150, (0, 110, 160)), (205, (0, 170, 140)),
-                (240, (60, 210, 200)), (255, (170, 255, 255)))
+                (240, (60, 210, 200)))
 
 
 def ocean_rgb(v):
@@ -205,8 +204,7 @@ def ocean_rgb(v):
 
 class Ocean:
     """Water: waves rolling along a horizontal strip, a shimmer in a bottle,
-    and depth up a vertical strip (deep at the bottom, light at the surface).
-    Now and then an LED catches the light."""
+    and depth up a vertical strip (deep at the bottom, light at the surface)."""
 
     speed = 5
 
@@ -215,20 +213,15 @@ class Ocean:
         self.t = 0
         self.ticks = 0  # time in fifths of a frame step, so speed scales it smoothly
         self.dir = -1 if reverse and layout == 'horizontal' else 1
-        self.level = bytearray(n)
-        self.glint = bytearray(n)
         # Each LED's resting level and how far the waves move it.
         if layout == 'vertical':
             # Index 0 of base is the bottom (the first LED, unless reversed).
             depth = [40 + 150 * i // max(1, n - 1) for i in range(n)]
             self.base = bytearray(depth[::-1] if reverse else depth)
             self.amp = 90
-            low = n - max(1, n // 3)  # glints only near the surface
-            self.glint_from, self.glint_to = (0, n - low) if reverse else (low, n)
         else:
             self.base = bytearray(150 for _ in range(n))
             self.amp = 200
-            self.glint_from, self.glint_to = 0, n
         self.table = colour_table(ocean_rgb)
         self.output = -1
         self.level = 0
@@ -239,20 +232,13 @@ class Ocean:
         self.ticks = (self.ticks + self.speed) & 0x3FFFF
         self.t = t = (self.ticks // 5) & 0xFFFF
         d = self.dir
-        n, base, glint, table, amp, lv = self.n, self.base, self.glint, self.table, self.amp, self.level
+        n, base, table, amp, lv = self.n, self.base, self.table, self.amp, self.level
         swell = SINE[t & 255] - 128  # the whole sea rising and falling, about 8.5 s a cycle
-        if getrandbits(4) == 0:
-            glint[self.glint_from + rand(self.glint_to - self.glint_from)] = 255
         for i in range(n):
             # Two waves of different lengths, travelling opposite ways.
             w = SINE[(i * 8 - t * 2 * d) & 255] + SINE[(i * 3 + t * d) & 255] - 256  # about -254 to 254
             v = base[i] + ((w * amp) >> 9) + (swell >> 2)
             v = 0 if v < 0 else 235 if v > 235 else v
-            g = glint[i]
-            if g:
-                glint[i] = g - 17 if g > 17 else 0
-                if g > v:
-                    v = g
             k = v * 3
             strip.set_rgb(i, (table[k] * lv + 128) >> 8, (table[k + 1] * lv + 128) >> 8, (table[k + 2] * lv + 128) >> 8)
         return FRAME_MS

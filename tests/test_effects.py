@@ -183,8 +183,8 @@ def test_horizontal_flames_move_along_the_strip():
 def test_water_colours_are_blue_green():
     for v in range(256):
         r, g, b = effects.ocean_rgb(v)
-        assert r <= 170 and max(g, b) >= r and (g + b) > 0, (v, (r, g, b))
-    assert effects.ocean_rgb(0) == (0, 8, 40) and effects.ocean_rgb(255) == (170, 255, 255)
+        assert r <= 60 and max(g, b) >= r and (g + b) > 0, (v, (r, g, b))
+    assert effects.ocean_rgb(0) == (0, 8, 40) and effects.ocean_rgb(255) == (60, 210, 200)
 
 
 @pytest.mark.parametrize('layout', ['bottle', 'horizontal', 'vertical'])
@@ -193,7 +193,7 @@ def test_ocean_only_shows_water_colours(layout):
     ocean = effects.Ocean(49, layout, False)
     for _ in range(100):
         for r, g, b in run(ocean, 49, 1):
-            assert max(g, b) >= r and r <= 170
+            assert max(g, b) >= r and r <= 60
 
 
 @pytest.mark.parametrize('reverse', [False, True])
@@ -209,11 +209,12 @@ def test_vertical_ocean_is_deepest_at_the_bottom(reverse):
     assert (bottom > top) if reverse else (top > bottom)
 
 
-def test_ocean_glints_now_and_then():
+def test_ocean_has_no_flashes():
+    # Its brightest is aqua: no LED ever jumps to a pale flash.
     random.seed(7)
     ocean = effects.Ocean(49, 'bottle', False)
-    pale = sum(1 for _ in range(300) for r, g, b in run(ocean, 49, 1) if r > 100)
-    assert 0 < pale < 300 * 49 // 20
+    top = max(max(p) for _ in range(300) for p in run(ocean, 49, 1))
+    assert top <= 210
 
 
 def test_reversed_horizontal_waves_travel_the_other_way():
