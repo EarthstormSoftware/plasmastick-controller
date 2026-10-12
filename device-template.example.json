@@ -1,0 +1,23 @@
+{
+    "wifi_ssid": "MyNetwork",
+    "mosqman": {
+        "exe": "mosqman",
+        "profile": "home"
+    },
+    "test_mqtt_user": "tester",
+    "device": {
+        "device_led_count": 60,
+        "device_led_rgbw": false,
+        "led_layout": "horizontal",
+        "default_mode": "Colour",
+        "mode_parameters": {"Colour": "#ffb46b"},
+        "default_state": false,
+        "utc_offset_min": 0,
+        "dst": "eu"
+    },
+    "mqtt": {
+        "broker_address": "192.168.1.10",
+        "ha_discovery": true,
+        "group": ""
+    }
+}

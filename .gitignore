@@ -2,6 +2,8 @@
 config.json
 provisioning.json
 device_name.json
+# Your own new-board template for scripts/new_device.py (copy device-template.example.json)
+device-template.json
 
 # Build output (mpy-cross)
 build/

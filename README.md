@@ -102,6 +102,34 @@ copies it to the device (libraries into `/lib`), checks that everything arrived,
 | `-SkipReset` | Don't reset the board after copying |
 | `-WiFi <host>` | Update over Wi-Fi instead of USB (see below) |
 
+### Setting up a new board
+
+`scripts/new_device.py` sets up a freshly flashed board in one go: the firmware, its Wi-Fi, an MQTT user of its own
+(named after the device, created with Mosquitto Manager's `mosqman`) and
+its settings. First flash Pimoroni's Plasma Stick 2040 W MicroPython; the script checks for it and won't touch a
+board that already has files unless given `--force`.
+
+Once: copy `device-template.example.json` to `device-template.json` (gitignored) and fill in your network name,
+broker, `mosqman` profile and the settings most boards share, then save the Wi-Fi details the boards get:
+
+```powershell
+py scripts\new_device.py save-wifi --from-port COM5   # from a working board, over USB
+py scripts\new_device.py save-wifi --prompt           # or type them
+```
+
+They're kept under `%APPDATA%\PlasmaStick`, encrypted with Windows DPAPI for your Windows account only. Then for
+each board:
+
+```powershell
+py scripts\new_device.py setup --port COM6 --name Kitchen --leds 60 --rgbw --group Downstairs
+py scripts\new_device.py check --name Kitchen --host 192.168.1.50   # after the broker has reloaded
+```
+
+Options on the command line (`--leds`, `--rgbw`/`--no-rgbw`, `--layout`, `--colour`, `--group`) override the
+template for that board. Both passwords are written to the board encrypted with its own key and are never printed.
+With a password-file broker, restart Mosquitto after `setup` so it loads the new user; `check` then waits for the
+board to log in and runs the smoke test through the template's `test_mqtt_user`.
+
 ### Updating over Wi-Fi
 
 Once a device runs this firmware, later versions can go over Wi-Fi:
@@ -193,7 +221,7 @@ Assistant.
 | `src/www/` | The web UI, deployed to `/www`: a static page that fills itself in from the JSON API |
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
 | `tests/` | Host-side pytest tests (`py -m pytest`); `conftest.py` stands in for the MicroPython-only modules |
-| `scripts/` | `deploy.ps1`; `wifi_update.py` (`deploy.ps1 -WiFi`); `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
+| `scripts/` | `deploy.ps1`; `wifi_update.py` (`deploy.ps1 -WiFi`); `new_device.py` (set up a new board); `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
 | `docs/` | Maintenance notes |
 
 ## Known Restrictions
