@@ -59,8 +59,34 @@ def _reset():
     raise SystemExit('machine.reset() called')
 
 
+class _WDT:
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.feeds = 0
+
+    def feed(self):
+        self.feeds += 1
+
+
+class _Timer:
+    def __init__(self, period=None, callback=None):
+        self.period, self.callback, self.running = period, callback, True
+
+    def deinit(self):
+        self.running = False
+
+
+class _Mem32(dict):
+    # Registers read as 0 until written; values are kept as 32-bit, like the hardware.
+    def __getitem__(self, addr):
+        return self.get(addr, 0)
+
+    def __setitem__(self, addr, value):
+        super().__setitem__(addr, value & 0xFFFFFFFF)
+
+
 _module('machine', Pin=_Pin, unique_id=lambda: bytes.fromhex('0123456789a1b2c3'),
-        reset=_reset, soft_reset=_reset)
+        reset=_reset, soft_reset=_reset, WDT=_WDT, Timer=_Timer, mem32=_Mem32())
 
 
 class _WLAN:

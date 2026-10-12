@@ -56,6 +56,9 @@ class DeviceAPI:
         # connection error, so the web UI can show why MQTT isn't connected.
         self.mqtt_client = None
         self.mqtt_error = None
+        # Set by main.py: how long the firmware had stalled when the watchdog
+        # last restarted the board, or None.
+        self.watchdog_stall = None
     
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
@@ -104,6 +107,7 @@ class DeviceAPI:
                 'connected': bool(client and client.isconnected()),
                 'error': self.mqtt_error,
             },
+            'watchdog_stall': self.watchdog_stall,
             'mem_free': gc.mem_free(),
             'mem_alloc': gc.mem_alloc(),
         }
@@ -172,6 +176,7 @@ class DeviceAPI:
                 'led_layout': dc.led_layout,
                 'led_reverse': dc.led_reverse,
                 'christmas_style': dc.christmas_style,
+                'watchdog': dc.watchdog,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -262,6 +267,8 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'watchdog' in dev:
+                cfg['device']['watchdog'] = bool(dev['watchdog'])
             if 'christmas_style' in dev:
                 if dev['christmas_style'] not in CHRISTMAS_STYLES:
                     return False, 'christmas_style must be one of ' + ', '.join(CHRISTMAS_STYLES)
@@ -390,6 +397,8 @@ class DeviceAPI:
     def restart(self):
         """Soft-reset the device. Does not return."""
         Log.info(TAG, 'Restarting device...')
+        import watchdog
+        watchdog.disable()  # the next boot starts its own
         machine.soft_reset()
 
     def set_mqtt_enabled(self, enabled):

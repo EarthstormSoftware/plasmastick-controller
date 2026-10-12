@@ -12,7 +12,8 @@
         "log_level": 1,
         "led_layout": "bottle",
         "led_reverse": false,
-        "christmas_style": "Twinkle"
+        "christmas_style": "Twinkle",
+        "watchdog": true
     },
     "wlan": {
         "ssid": "",

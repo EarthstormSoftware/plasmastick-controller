@@ -140,6 +140,8 @@ class WLAN:
         if not self.ever_connected and (self.retry_count >= SETUP_FALLBACK_ATTEMPTS or not self.can_retry()):
             Log.error(TAG, f'{reason}. No connection since boot after {self.retry_count} attempts, so restarting into setup mode.')
             DeviceConfig.request_setup_mode()
+            import watchdog
+            watchdog.disable()  # setup mode runs without one
             machine.soft_reset()
         if self.can_retry():
             self.disconnect(True)

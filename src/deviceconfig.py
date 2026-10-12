@@ -31,6 +31,8 @@ _DEFAULT_CONFIG = {
         "led_reverse": False,
         # The Christmas style when a request doesn't name one: see CHRISTMAS_STYLES.
         "christmas_style": "Twinkle",
+        # Restart the board if the firmware stops responding (see watchdog.py).
+        "watchdog": True,
     },
     "wlan": {
         "ssid": "",
@@ -184,6 +186,7 @@ class DeviceConfig:
         if self.christmas_style not in CHRISTMAS_STYLES:
             Log.warn(TAG, f'Ignoring christmas_style {self.christmas_style!r}; it must be one of {", ".join(CHRISTMAS_STYLES)}')
             self.christmas_style = "Twinkle"
+        self.watchdog = bool(configdata["device"]["watchdog"])
         self.default_brightness = configdata["device"]["default_brightness"]
         if not is_valid_brightness(self.default_brightness):
             Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')

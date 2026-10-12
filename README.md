@@ -41,6 +41,10 @@ API, MQTT, or the button on the board.
   it starts setup mode. Wire a momentary switch across the middle two pins of the Qw/ST connector (3V3 and SDA,
   which is GP4), so a press pulls GP4 high. For a switch to GND instead, change `BUTTON_PULL` and `PRESSED_LEVEL` in
   `src/devicebutton.py`.
+- Watchdog: if the firmware stops responding (its event loop stalls for 30 s, or it hangs outright), the board's
+  hardware watchdog restarts it. A slow network call doesn't count as a stall. The next boot logs how long it had
+  stalled, and `/api/info` reports it as `watchdog_stall`. Ctrl-C at the USB REPL (as `mpremote` and the deploy
+  script do) turns it off. `device.watchdog` (Device tab, Diagnostics) turns it off altogether, for debugging.
 
 ## Pre-requisites
 

@@ -299,3 +299,11 @@ def test_the_page_offers_exactly_the_christmas_styles():
     assert tuple(re.findall(r'data-style="(\w+)"', page)) == CHRISTMAS_STYLES
     select = page.split('id="christmas_style"')[1].split('</select>')[0]
     assert tuple(re.findall(r'<option value="(\w+)"', select)) == CHRISTMAS_STYLES
+
+
+def test_watchdog_setting_needs_a_restart(api):
+    assert api.get_config()['device']['watchdog'] is True
+    assert api.save_config({'device': {'watchdog': False}}) == (True, None)
+    assert saved_config(api)['device']['watchdog'] is False
+    assert api.restart_required()
+    assert api.get_device_info()['watchdog_stall'] is None

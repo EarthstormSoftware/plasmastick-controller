@@ -10,6 +10,7 @@ from devicebutton import DeviceButton
 from wlan import WLAN
 from api import DeviceAPI
 from httpserver import HTTPServer
+import watchdog
 # provisioning and mqtt_as are imported only when needed, to save heap.
 
 
@@ -21,6 +22,12 @@ Log.set_use_datetime(True)
 Log.start()
 from version import VERSION
 Log.info(TAG, f'Plasma Stick starting, firmware {VERSION}')
+# A watchdog left running by a soft reset would restart the board mid-boot;
+# main() starts a fresh one once everything is running.
+watchdog.disable()
+watchdog_stall = watchdog.take_stall_report()
+if watchdog_stall is not None:
+    Log.warn(TAG, f'Restarted by the watchdog: the firmware had stalled for {watchdog_stall} s')
 device_config = DeviceConfig.loadConfigFromFile()
 Log.set_log_level(device_config.log_level)
 
@@ -52,6 +59,7 @@ wlan = WLAN(device_config, pico_led)
 
 Log.info(TAG,'Initialising API and Web UI')
 device_api = DeviceAPI(device_config, led_strip, pico_led)
+device_api.watchdog_stall = watchdog_stall
 Log.info(TAG,'Initialising button')
 control_button = DeviceButton(device_config, pico_led, led_strip, device_api)
 
@@ -264,10 +272,15 @@ async def heap_monitor():
 
 LOOP_LAG_WARN_MS = 500
 
+dog = None  # the watchdog, once main() has started it
+
 async def loop_monitor():
     # Warns when the event loop was held up: a 100 ms sleep that wakes much later
-    # means some task blocked, which stalls HTTP, MQTT and the LEDs alike.
+    # means some task blocked, which stalls HTTP, MQTT and the LEDs alike. Also
+    # tells the watchdog the event loop is running.
     while True:
+        if dog:
+            dog.heartbeat()
         started = time.ticks_ms()
         await asyncio.sleep_ms(100)
         late = time.ticks_diff(time.ticks_ms(), started) - 100
@@ -275,7 +288,7 @@ async def loop_monitor():
             Log.warn(TAG, f'Event loop was blocked for about {late} ms')
 
 async def main(client):
-    global http_server
+    global http_server, dog
 
     # Start long-running controllers once event loop is active.
     asyncio.create_task(pico_led.controller())
@@ -310,6 +323,9 @@ async def main(client):
     asyncio.create_task(http_server_task())
     asyncio.create_task(heap_monitor())
     asyncio.create_task(loop_monitor())
+    if device_config.watchdog:
+        dog = watchdog.Watchdog()
+        Log.info(TAG, 'Watchdog started')
 
     if client is None:
         Log.warn(TAG,'MQTT is disabled (no broker configured or mqtt.enabled=false). Running HTTP/API only.')
@@ -341,6 +357,11 @@ device_api.mqtt_client = client
 try:
     Log.info(TAG,'Calling main function')
     asyncio.run(main(client))
+except KeyboardInterrupt:
+    # Ctrl-C (mpremote does this to deploy): stay in the REPL, no restart.
+    if dog:
+        dog.stop()
+    raise
 finally:
     if client is not None:
         client.close()  # Prevent LmacRxBlk:1 errors
