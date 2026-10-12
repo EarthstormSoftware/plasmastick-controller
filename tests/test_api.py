@@ -377,3 +377,10 @@ def test_time_zone_location_and_schedule_are_checked_and_apply_live(api):
                      ({'schedule': [{'days': [], 'at': '18:00', 'action': 'on'}]}, 'schedule event 1')]:
         ok_, error = api.save_config({'device': bad})
         assert not ok_ and error.startswith(why)
+
+
+def test_the_settings_code_is_let_go_after_use(api):
+    import sys
+    api.get_config()
+    api.save_config({'device': {'default_state': True}})
+    assert 'settings' not in sys.modules

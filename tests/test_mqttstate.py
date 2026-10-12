@@ -3,6 +3,8 @@ import json
 
 import pytest
 
+import mqttgroup
+import mqttha
 import mqttstate
 from deviceconfig import DeviceConfig
 from ledstrip import MODES, LedStrip, light_output
@@ -103,7 +105,7 @@ def test_state_payloads():
 
 
 def test_discovery_payload():
-    config = json.loads(mqttstate.ha_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), MODES))
+    config = json.loads(mqttha.ha_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), MODES))
     assert config['schema'] == 'json'
     assert config['unique_id'] == 'PorchLights_light'
     assert config['command_topic'] == '/home/device/PorchLights/ha/set'
@@ -237,16 +239,16 @@ def test_info_payload_has_the_health_figures():
         'version': '1.1.0', 'uptime_s': 125, 'rssi': -61, 'ip': '192.168.1.20', 'mem_free': 86000}
 
 
-@pytest.mark.parametrize('key', [s[0] for s in mqttstate.SENSORS])
+@pytest.mark.parametrize('key', list(mqttstate.SENSOR_KEYS))
 def test_sensor_discovery_reads_the_info_topic(key):
     t = mqttstate.topics('PorchLights')
-    config = json.loads(mqttstate.ha_sensor_discovery_payload('PorchLights', t, key))
+    config = json.loads(mqttha.ha_sensor_discovery_payload('PorchLights', t, key))
     assert config['state_topic'] == t['info'] and config['availability_topic'] == t['status']
     assert config['value_template'] == '{{ value_json.' + key + ' }}'
     assert config['unique_id'] == 'PorchLights_' + key
     assert config['entity_category'] == 'diagnostic'
     # The same device as the light, so Home Assistant shows them together.
-    light = json.loads(mqttstate.ha_discovery_payload('PorchLights', t, MODES))
+    light = json.loads(mqttha.ha_discovery_payload('PorchLights', t, MODES))
     assert config['device']['identifiers'] == light['device']['identifiers']
     # Every sensor reads a figure the info payload has.
     info = {'version': 'x', 'uptime_s': 1, 'mem_free': 1, 'wifi': {'ip': 'x', 'rssi': -1}}
@@ -255,7 +257,7 @@ def test_sensor_discovery_reads_the_info_topic(key):
 
 def test_unknown_sensor():
     with pytest.raises(ValueError):
-        mqttstate.ha_sensor_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), 'nope')
+        mqttha.ha_sensor_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), 'nope')
 
 
 def test_group_topic_only_when_in_a_group():
@@ -280,15 +282,15 @@ def report(**kw):
 
 def roundtrip(rep):
     from ledstrip import mode_parameters_error
-    return mqttstate.parse_group(json.loads(mqttstate.group_payload(rep, 'Porch')), MODES, mode_parameters_error)
+    return mqttgroup.parse_group(json.loads(mqttgroup.group_payload(rep, 'Porch')), MODES, mode_parameters_error)
 
 
 def test_group_payload_carries_only_the_defining_parameter():
-    assert json.loads(mqttstate.group_payload(report(), 'Porch')) == {
+    assert json.loads(mqttgroup.group_payload(report(), 'Porch')) == {
         'State': True, 'Mode': 'Colour', 'ModeParameters': {'Colour': '#ffb46b'}, 'Brightness': 66, 'From': 'Porch'}
-    cheer = json.loads(mqttstate.group_payload(report(mode='CheerLights', colour='#ff0000'), 'Porch'))
+    cheer = json.loads(mqttgroup.group_payload(report(mode='CheerLights', colour='#ff0000'), 'Porch'))
     assert cheer['ModeParameters'] == {}  # each member fetches its own colour
-    xmas = json.loads(mqttstate.group_payload(report(mode='Christmas', colour=None, style='Fade'), 'Porch'))
+    xmas = json.loads(mqttgroup.group_payload(report(mode='Christmas', colour=None, style='Fade'), 'Porch'))
     assert xmas['ModeParameters'] == {'Style': 'Fade'}
 
 
@@ -296,18 +298,18 @@ def test_group_payload_carries_only_the_defining_parameter():
                                  report(mode='CheerLights', colour='#00ff00'),
                                  report(mode='Christmas', colour=None, style='Twinkle')])
 def test_a_devices_own_group_message_changes_nothing(rep):
-    assert mqttstate.group_actions(roundtrip(rep), rep, True) == []
+    assert mqttgroup.group_actions(roundtrip(rep), rep, True) == []
 
 
 def test_following_the_group():
     group = roundtrip(report(state=True, mode='Christmas', colour=None, style='Fade', brightness=30))
     here = report(state=False, mode='Christmas', colour=None, style='Twinkle', brightness=80)
-    assert mqttstate.group_actions(group, here, True) == [
+    assert mqttgroup.group_actions(group, here, True) == [
         ('power', True), ('mode', 'Christmas', {'Style': 'Fade'}), ('brightness', 30)]
-    assert mqttstate.group_actions(group, here, False) == [('power', True), ('mode', 'Christmas', {'Style': 'Fade'})]
+    assert mqttgroup.group_actions(group, here, False) == [('power', True), ('mode', 'Christmas', {'Style': 'Fade'})]
     # A colour change is a change; the same colour in other letters isn't.
-    assert mqttstate.group_actions(roundtrip(report(colour='#FFC0CB')), report(colour='#ffc0cb'), True) == []
-    assert mqttstate.group_actions(roundtrip(report(colour='#0000ff')), report(), True) == [
+    assert mqttgroup.group_actions(roundtrip(report(colour='#FFC0CB')), report(colour='#ffc0cb'), True) == []
+    assert mqttgroup.group_actions(roundtrip(report(colour='#0000ff')), report(), True) == [
         ('mode', 'Colour', {'Colour': '#0000ff'})]
 
 
@@ -320,14 +322,14 @@ def test_following_the_group():
 def test_unusable_group_messages_are_refused_whole(payload):
     from ledstrip import mode_parameters_error
     with pytest.raises(ValueError):
-        mqttstate.parse_group(payload, MODES, mode_parameters_error)
+        mqttgroup.parse_group(payload, MODES, mode_parameters_error)
 
 
 def test_groups_carry_the_speed():
     rep = report(mode='Christmas', colour=None, style='Fade', speed=8)
-    assert json.loads(mqttstate.group_payload(rep, 'P'))['ModeParameters'] == {'Style': 'Fade', 'Speed': 8}
-    assert mqttstate.group_actions(roundtrip(rep), rep, True) == []
-    assert mqttstate.group_actions(roundtrip(rep), dict(rep, speed=5), True) == [
+    assert json.loads(mqttgroup.group_payload(rep, 'P'))['ModeParameters'] == {'Style': 'Fade', 'Speed': 8}
+    assert mqttgroup.group_actions(roundtrip(rep), rep, True) == []
+    assert mqttgroup.group_actions(roundtrip(rep), dict(rep, speed=5), True) == [
         ('mode', 'Christmas', {'Style': 'Fade', 'Speed': 8})]
 
 
@@ -337,7 +339,7 @@ def test_colour_temperature_from_home_assistant():
     assert mqttstate.parse_ha_command({'color_temp': 600}, MODES) == [('mode', 'Colour', {'Kelvin': 2000})]  # clamped
     with pytest.raises(ValueError):
         mqttstate.parse_ha_command({'color_temp': 'warm'}, MODES)
-    config = json.loads(mqttstate.ha_discovery_payload('P', mqttstate.topics('P'), MODES))
+    config = json.loads(mqttha.ha_discovery_payload('P', mqttstate.topics('P'), MODES))
     assert config['supported_color_modes'] == ['rgb', 'color_temp']
     assert (config['min_mireds'], config['max_mireds']) == (153, 500)
 
@@ -372,3 +374,7 @@ def test_a_colour_temperature_becomes_its_white(tmp_path, monkeypatch):
     warm, red = asyncio.run(go())
     assert warm['colour'] == '#ffa757' and warm['kelvin'] == 2700
     assert red['kelvin'] is None  # a plain colour isn't a temperature
+
+
+def test_the_sensor_descriptions_match_the_sensor_topics():
+    assert tuple(s[0] for s in mqttha.SENSORS) == mqttstate.SENSOR_KEYS

@@ -32,19 +32,11 @@ MAX_TOPIC_PREFIX_LEN = 100
 
 INFO_INTERVAL_S = 60
 
-# Home Assistant diagnostic sensors, read from the info topic: (key, name, extra config).
-SENSORS = (
-    ('rssi', 'Wi-Fi signal', {'device_class': 'signal_strength', 'unit_of_measurement': 'dBm',
-                              'state_class': 'measurement'}),
-    ('uptime_s', 'Uptime', {'device_class': 'duration', 'unit_of_measurement': 's',
-                            'state_class': 'total_increasing'}),
-    ('mem_free', 'Free memory', {'device_class': 'data_size', 'unit_of_measurement': 'B',
-                                 'state_class': 'measurement'}),
-    ('ip', 'IP address', {}),
-)
+# The info figures Home Assistant shows as sensors (mqttha.py describes them).
+SENSOR_KEYS = ('rssi', 'uptime_s', 'mem_free', 'ip')
 
 # The topics the device publishes retained, so ones it stops using need clearing.
-RETAINED = ('state', 'status', 'info', 'ha_state', 'ha_config') + tuple('ha_sensor_' + s[0] for s in SENSORS)
+RETAINED = ('state', 'status', 'info', 'ha_state', 'ha_config') + tuple('ha_sensor_' + k for k in SENSOR_KEYS)
 
 
 def _prefix_error(value, setting, placeholder):
@@ -98,7 +90,7 @@ def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX, grou
         'ha_set': base + '/ha/set',
         'ha_config': ha_prefix + '/light/' + client_id + '/config',
     }
-    for key, _, _ in SENSORS:
+    for key in SENSOR_KEYS:
         t['ha_sensor_' + key] = ha_prefix + '/sensor/' + client_id + '/' + key + '/config'
     if group:
         t['group'] = GROUP_PREFIX + group
@@ -143,57 +135,6 @@ def info_payload(info):
                         'ip': info['wifi']['ip'], 'mem_free': info['mem_free']})
 
 
-# The report keys behind each mode parameter a group passes on (CheerLights
-# members fetch their own colour, so only Colour mode's colour goes).
-_GROUP_KEYS = (('Colour', 'colour'), ('Style', 'style'), ('Speed', 'speed'))
-
-
-def group_payload(report, client_id):
-    """The group's new state after a local change: like the state payload, with
-    only the parameters that define the mode, and who sent it."""
-    return ujson.dumps({'State': report['state'], 'Mode': report['mode'],
-                        'ModeParameters': _parameters(report, colour=report['mode'] == 'Colour'),
-                        'Brightness': report['brightness'], 'From': client_id})
-
-
-def group_actions(group, current, follow_brightness):
-    """What following the group (from parse_group) changes, given what the device
-    shows now (current: {'state', 'mode', 'colour', 'style', 'speed', 'brightness'}):
-    ('power', bool), ('mode', name, parameters or None) and ('brightness', n).
-    Only differences, so a device's own message coming back changes nothing."""
-    actions = []
-    if group['state'] != current['state']:
-        actions.append(('power', group['state']))
-    wanted = {k: group['parameters'][k] for k, _ in _GROUP_KEYS if group['parameters'].get(k) is not None
-              and (k != 'Colour' or group['mode'] == 'Colour')}
-    differs = any(str(v).lower() != str(current.get(r) or '').lower() for k, r in _GROUP_KEYS
-                  for v in [wanted.get(k)] if v is not None)
-    if group['mode'] != current['mode'] or differs:
-        actions.append(('mode', group['mode'], wanted or None))
-    if follow_brightness and group['brightness'] != current['brightness']:
-        actions.append(('brightness', group['brightness']))
-    return actions
-
-
-def parse_group(payload, modes, mode_parameters_error):
-    """A group message as {'state', 'mode', 'parameters', 'brightness'}; raises
-    ValueError if any part is unusable (so nothing half-applies)."""
-    if not isinstance(payload, dict):
-        raise ValueError('group state must be a JSON object')
-    state, mode = payload.get('State'), payload.get('Mode')
-    parameters, brightness = payload.get('ModeParameters') or {}, payload.get('Brightness')
-    if not isinstance(state, bool):
-        raise ValueError('State must be true or false')
-    if mode not in modes:
-        raise ValueError('unknown Mode')
-    error = mode_parameters_error(mode, parameters)
-    if error:
-        raise ValueError(error)
-    if isinstance(brightness, bool) or not isinstance(brightness, int) or not 1 <= brightness <= 100:
-        raise ValueError('Brightness must be 1-100')
-    return {'state': state, 'mode': mode, 'parameters': parameters, 'brightness': brightness}
-
-
 # Home Assistant gives colour temperatures in mireds (a million over kelvin).
 MIN_MIREDS, MAX_MIREDS = 153, 500  # 6500 K to 2000 K
 
@@ -207,48 +148,6 @@ def ha_state_payload(report):
     if report.get('colour'):
         payload['color'] = _rgb(report['colour'])
     return ujson.dumps(payload)
-
-
-def ha_discovery_payload(client_id, t, modes, sw_version=None):
-    """t: the device's topics() dict."""
-    device = {'identifiers': [client_id], 'name': client_id,
-              'manufacturer': 'Pimoroni', 'model': 'Plasma Stick 2040 W'}
-    if sw_version:
-        device['sw_version'] = sw_version
-    return ujson.dumps({
-        'name': None,  # the entity takes the device's name
-        'unique_id': client_id + '_light',
-        'schema': 'json',
-        'command_topic': t['ha_set'],
-        'state_topic': t['ha_state'],
-        'availability_topic': t['status'],
-        'supported_color_modes': ['rgb', 'color_temp'],
-        'min_mireds': MIN_MIREDS,
-        'max_mireds': MAX_MIREDS,
-        'brightness': True,
-        'brightness_scale': 100,  # percent, as the device uses
-        'effect': True,
-        'effect_list': list(modes),
-        'device': device,
-    })
-
-
-def ha_sensor_discovery_payload(client_id, t, key):
-    """Discovery config for one of SENSORS, on the same device as the light."""
-    for k, name, extra in SENSORS:
-        if k == key:
-            config = {
-                'name': name,
-                'unique_id': client_id + '_' + key,
-                'state_topic': t['info'],
-                'value_template': '{{ value_json.' + key + ' }}',
-                'availability_topic': t['status'],
-                'entity_category': 'diagnostic',
-                'device': {'identifiers': [client_id]},
-            }
-            config.update(extra)
-            return ujson.dumps(config)
-    raise ValueError('unknown sensor')
 
 
 def parse_ha_command(payload, modes):
