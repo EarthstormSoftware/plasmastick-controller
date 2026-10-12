@@ -82,6 +82,8 @@ class Device:
             except ValueError:
                 pass
             raise SystemExit(f'{method} {path}: HTTP {e.code}: {text}')
+        except OSError as e:  # not reachable, refused, timed out
+            raise SystemExit(f"Can't reach {self.base}: {getattr(e, 'reason', e)}")
 
 
 def wait_for_restart(device, version, started, timeout=240):

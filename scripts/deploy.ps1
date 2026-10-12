@@ -4,9 +4,12 @@ param(
     [switch]$Wipe,
     [switch]$SkipReset,
     [string]$Port,
-    # Update over Wi-Fi instead of USB: the device's hostname or IP address.
-    # Needs a web password on the device (PLASMASTICK_WEB_PASSWORD, or asked for).
-    [string]$WiFi
+    # Update over Wi-Fi instead of USB: the devices' hostnames or IP addresses,
+    # comma-separated for several (built once). Needs each device's web password
+    # (PLASMASTICK_WEB_PASSWORD, or asked for per device).
+    [string[]]$WiFi,
+    # Compile everything again, not just what changed.
+    [switch]$Rebuild
 )
 
 Set-StrictMode -Version Latest
@@ -181,20 +184,44 @@ function Assert-DeviceReachable {
 # Everything except main.py is precompiled to .mpy. Importing a .py makes the
 # device compile it in RAM, which spikes heap use at boot and leaves it
 # fragmented. main.py must stay a .py, because MicroPython only runs main.py.
+# Only what changed is compiled again: a .mpy is kept while it's newer than its
+# source. A new mpy-cross version (or -Rebuild) starts from scratch.
+$script:compiled = 0
+$script:upToDate = 0
 function Compress-ToMpy {
     param([string]$Source, [string]$Destination)
+    if ((Test-Path $Destination) -and (Get-Item $Destination).LastWriteTimeUtc -ge (Get-Item $Source).LastWriteTimeUtc) {
+        $script:upToDate++
+        return
+    }
     New-Item -ItemType Directory -Force (Split-Path -Parent $Destination) | Out-Null
     $mxResult = py -m mpy_cross -march=armv6m $Source -o $Destination 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "mpy-cross failed for ${Source}: $mxResult" }
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -Force $Destination -ErrorAction SilentlyContinue
+        throw "mpy-cross failed for ${Source}: $mxResult"
+    }
+    $script:compiled++
 }
 
 $buildDeviceDir = Join-Path $buildDir 'device'
 $buildLibDir = Join-Path $buildDir 'lib'
-if (Test-Path $buildDeviceDir) { Remove-Item -Recurse -Force $buildDeviceDir }
+$stampFile = Join-Path $buildDir 'mpy-cross.version'
+$mpyCrossVersion = (py -m mpy_cross --version 2>&1 | Out-String).Trim()
+$stamp = if (Test-Path $stampFile) { (Get-Content -Raw $stampFile).Trim() } else { '' }
+if ($Rebuild -or $stamp -ne $mpyCrossVersion) {
+    foreach ($dir in @($buildDeviceDir, $buildLibDir)) {
+        if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+    }
+}
+New-Item -ItemType Directory -Force $buildDir | Out-Null
+Set-Content -Path $stampFile -Value $mpyCrossVersion -Encoding ascii
 
 # Every top-level .py in src/ is device code and goes to the device root.
 $moduleNames = @(Get-ChildItem -Path $srcDir -Filter '*.py' -File | Where-Object { $_.Name -ne 'main.py' } | ForEach-Object { $_.BaseName })
-Write-Host "Compiling $($moduleNames.Count) modules and libraries to .mpy..."
+# A module removed from src/ must not be deployed from an old build.
+if (Test-Path $buildDeviceDir) {
+    Get-ChildItem -Path $buildDeviceDir -Filter '*.mpy' -File | Where-Object { $_.BaseName -notin $moduleNames } | Remove-Item -Force
+}
 foreach ($name in $moduleNames) {
     Compress-ToMpy -Source (Join-Path $srcDir "$name.py") -Destination (Join-Path $buildDeviceDir "$name.mpy")
 }
@@ -215,7 +242,7 @@ Compress-ToMpy -Source (Join-Path $srcDir 'lib/microdot.py') -Destination $micro
 Compress-ToMpy -Source (Join-Path $srcDir 'lib/mqtt_as/__init__.py') -Destination $mqttAsMpy
 $libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy'; $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
 $totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
-Write-Host "Compiled ($totalKb KB to copy)"
+Write-Host "Compiled $($script:compiled) module(s), $($script:upToDate) up to date ($totalKb KB in all)"
 
 if ($WiFi) {
     # Hand the same files to the Wi-Fi updater (main.py and otaboot excepted: USB only).
@@ -228,8 +255,22 @@ if ($WiFi) {
     }
     $mapFile = Join-Path $buildDir 'files.json'
     $fileMap | ConvertTo-Json | Set-Content -Path $mapFile -Encoding utf8
-    & py (Join-Path $scriptDir 'wifi_update.py') --host $WiFi --files $mapFile
-    exit $LASTEXITCODE
+    # Built once, sent to each board in turn.
+    $failed = @()
+    foreach ($wifiHost in $WiFi) {
+        Write-Host "`n=== $wifiHost"
+        # A board that fails is reported, and the rest still get updated.
+        $ErrorActionPreference = 'Continue'
+        & py (Join-Path $scriptDir 'wifi_update.py') --host $wifiHost --files $mapFile
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        if ($code -ne 0) { $failed += $wifiHost }
+    }
+    if ($failed.Count -gt 0) {
+        Write-Host "`nNot updated: $($failed -join ', ')"
+        exit 1
+    }
+    exit 0
 }
 
 # config.json holds settings saved from the web UI, so it is only pushed when the
