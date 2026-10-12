@@ -30,16 +30,26 @@ def rand(n):
     return (getrandbits(8) * n) >> 8
 
 
-def scaled_table(colour, output):
-    """256 colours from colour(i) (0-255 each) as r, g, b bytes, scaled to the brightness."""
-    level = int(output * 256 + 0.5)
-    t = bytearray(768)
-    for i in range(256):
-        r, g, b = colour(i)
-        t[3 * i] = (r * level + 128) >> 8
-        t[3 * i + 1] = (g * level + 128) >> 8
-        t[3 * i + 2] = (b * level + 128) >> 8
+_tables = {}
+
+
+def colour_table(colour):
+    """256 colours from colour(i) as r, g, b bytes, at full brightness. Building
+    one takes a few hundred ms on the Pico, so each is made once and kept (768
+    bytes); the brightness is applied as each LED is drawn, so fades and
+    brightness changes cost nothing extra."""
+    t = _tables.get(colour)
+    if t is None:
+        t = bytearray(768)
+        for i in range(256):
+            t[3 * i], t[3 * i + 1], t[3 * i + 2] = colour(i)
+        _tables[colour] = t
     return t
+
+
+def level(output):
+    """The brightness (output, 0-1) as a multiplier out of 256, for (value * level + 128) >> 8."""
+    return int(output * 256 + 0.5)
 
 
 def hue_rgb(h):
@@ -62,17 +72,18 @@ class Rainbows:
         self.offset = 0  # 8.8 fixed point: the high byte is the table step
         # Where each LED sits around the colour wheel.
         self.pos = bytearray((n - 1 - i if reverse else i) * 256 // n for i in range(n))
-        self.table = None  # r, g, b for each of 256 hues, at the current brightness
+        self.table = colour_table(hue_rgb)
         self.output = -1
+        self.level = 0
 
     def frame(self, strip, output):
         if output != self.output:
-            self.table, self.output = scaled_table(hue_rgb, output), output
+            self.output, self.level = output, level(output)
         self.offset = (self.offset + self.STEP) & 0xFFFF
-        off, t, pos = self.offset >> 8, self.table, self.pos
+        off, t, pos, lv = self.offset >> 8, self.table, self.pos, self.level
         for i in range(self.n):
             k = ((pos[i] + off) & 255) * 3
-            strip.set_rgb(i, t[k], t[k + 1], t[k + 2])
+            strip.set_rgb(i, (t[k] * lv + 128) >> 8, (t[k + 1] * lv + 128) >> 8, (t[k + 2] * lv + 128) >> 8)
         return FRAME_MS
 
 
@@ -93,8 +104,9 @@ class Fire:
         self.n = n
         self.reverse = reverse
         self.heat = bytearray(n)
-        self.table = None
+        self.table = colour_table(heat_rgb)
         self.output = -1
+        self.level = 0
         if layout == 'vertical':
             self.step = self._rise
             # Taller strips cool less per LED, so the flames reach about as high.
@@ -109,15 +121,16 @@ class Fire:
 
     def frame(self, strip, output):
         if output != self.output:
-            self.table, self.output = scaled_table(heat_rgb, output), output
+            self.output, self.level = output, level(output)
         self.step(strip)
         return FRAME_MS
 
     def _draw(self, strip, heat, flip):
-        t, last = self.table, self.n - 1
+        t, last, lv = self.table, self.n - 1, self.level
         for i in range(self.n):
             k = heat[i] * 3
-            strip.set_rgb(last - i if flip else i, t[k], t[k + 1], t[k + 2])
+            strip.set_rgb(last - i if flip else i,
+                          (t[k] * lv + 128) >> 8, (t[k + 1] * lv + 128) >> 8, (t[k + 2] * lv + 128) >> 8)
 
     def _ease(self):
         # Each LED eases towards its own target heat and picks a new one on
@@ -202,15 +215,16 @@ class Ocean:
             self.base = bytearray(150 for _ in range(n))
             self.amp = 200
             self.glint_from, self.glint_to = 0, n
-        self.table = None
+        self.table = colour_table(ocean_rgb)
         self.output = -1
+        self.level = 0
 
     def frame(self, strip, output):
         if output != self.output:
-            self.table, self.output = scaled_table(ocean_rgb, output), output
+            self.output, self.level = output, level(output)
         self.t = t = (self.t + 1) & 0xFFFF
         d = self.dir
-        n, base, glint, table, amp = self.n, self.base, self.glint, self.table, self.amp
+        n, base, glint, table, amp, lv = self.n, self.base, self.glint, self.table, self.amp, self.level
         swell = SINE[t & 255] - 128  # the whole sea rising and falling, about 8.5 s a cycle
         if getrandbits(4) == 0:
             glint[self.glint_from + rand(self.glint_to - self.glint_from)] = 255
@@ -225,7 +239,7 @@ class Ocean:
                 if g > v:
                     v = g
             k = v * 3
-            strip.set_rgb(i, table[k], table[k + 1], table[k + 2])
+            strip.set_rgb(i, (table[k] * lv + 128) >> 8, (table[k + 1] * lv + 128) >> 8, (table[k + 2] * lv + 128) >> 8)
         return FRAME_MS
 
 

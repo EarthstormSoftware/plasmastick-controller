@@ -286,3 +286,21 @@ def test_changing_the_default_style_remakes_the_animation(strip):
     assert not first.fade
     strip.device_config.christmas_style = 'Fade'
     assert strip._animation().fade
+
+
+def test_colour_tables_are_built_once_and_shared():
+    a = effects.Rainbows(10, 'bottle', False)
+    b = effects.Rainbows(20, 'horizontal', True)
+    assert a.table is b.table is effects.colour_table(effects.hue_rgb)
+    assert effects.Fire(5, 'bottle', False).table is effects.colour_table(effects.heat_rgb)
+
+
+@pytest.mark.parametrize('name', sorted(effects.EFFECTS))
+def test_a_fade_changes_only_the_brightness_not_the_colours(name):
+    random.seed(12)
+    effect = effects.EFFECTS[name](12, 'horizontal', False, 'Fade')
+    table = getattr(effect, 'table', None)
+    strip = Strip(12)
+    for step in range(20):
+        effect.frame(strip, 0.2 + step * 0.04)
+    assert getattr(effect, 'table', None) is table
