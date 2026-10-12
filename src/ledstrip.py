@@ -8,7 +8,7 @@ from deviceconfig import DEFAULT_COLOUR
 TAG = "LEDS"
 
 # The animated modes, drawn by effects.py (its EFFECTS has the same names).
-EFFECT_MODES = ('Rainbows', 'Fire')
+EFFECT_MODES = ('Rainbows', 'Fire', 'Ocean')
 # The lighting modes the strip supports.
 MODES = ('Colour', 'CheerLights') + EFFECT_MODES
 
