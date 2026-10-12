@@ -104,6 +104,8 @@ input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid var(--bo
 .btn-full.danger{background:var(--bad-bg);color:var(--bad);border:1.5px solid var(--bad)}
 .confirm{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--text2);margin-top:8px}
 .btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--on-accent)}
+.topics div{overflow-wrap:anywhere;margin-bottom:2px}
+.topics code{font-size:12px;color:var(--text2)}
 footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 </style>
 </head>
@@ -334,9 +336,24 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       </details>
     </div>
     <div class="group">
+      <div class="sec">Topics</div>
+      <div class="frow">
+        <div class="field"><label for="topic_base">Topic Base</label>
+          <input type="text" required name="topic_base" id="topic_base" maxlength="100" placeholder="/home/device/{name}" aria-describedby="topic_help topic_preview" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="topic_help">{name} becomes the device name. Topics no longer used are cleared from the broker after the restart.</p>
+      <div class="note topics" id="topic_preview"></div>
+    </div>
+    <div class="group">
       <div class="sec">Home Assistant</div>
       <label class="check"><input type="checkbox" name="ha_discovery" id="ha_discovery" value="true"> Announce the light to Home Assistant</label>
-      <p class="note">Home Assistant adds the light automatically (MQTT discovery). Turning this off removes it again.</p>
+      <div class="frow">
+        <div class="field"><label for="ha_prefix">Discovery Prefix</label>
+          <input type="text" required name="ha_prefix" id="ha_prefix" maxlength="100" placeholder="homeassistant" aria-describedby="ha_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="ha_help">Home Assistant adds the light automatically (MQTT discovery). Turning this off removes it again. Only change the prefix if Home Assistant's has been changed.</p>
     </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
@@ -674,6 +691,22 @@ document.querySelectorAll('form.reset-form').forEach(function (f) {
   });
 });
 
+// Show the topics the base gives, as they'll be once saved.
+var deviceName = '';
+function showTopics() {
+  var base = el('topic_base').value.trim().split('{name}').join(deviceName), p = el('topic_preview');
+  p.textContent = '';
+  if (!base) return;
+  [['Commands', '/control'], ['State', '/state'], ['Online status', '/status']].forEach(function (x) {
+    var d = document.createElement('div'), c = document.createElement('code');
+    d.textContent = x[0] + ': ';
+    c.textContent = base + x[1];
+    d.appendChild(c);
+    p.appendChild(d);
+  });
+}
+el('topic_base').addEventListener('input', showTopics);
+
 fetch('/api/config')
   .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(function (cfg) {
@@ -702,6 +735,10 @@ fetch('/api/config')
     el('queue_len').value = mq.queue_len;
     el('clean').checked = !!mq.clean;
     el('ha_discovery').checked = !!mq.ha_discovery;
+    el('topic_base').value = mq.topic_base;
+    el('ha_prefix').value = mq.ha_prefix;
+    deviceName = dev.device_name;
+    showTopics();
     el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';
     settingsForms.forEach(function (f) { remember(f); f.querySelector('.save').disabled = false; });
   })

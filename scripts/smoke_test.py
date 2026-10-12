@@ -183,12 +183,13 @@ def test_mqtt(dev, config, args):
 
     broker = args.broker or mqtt['broker_address']
     device_name = config.get('device', {}).get('device_name')
-    base = f'/home/device/{device_name}'
+    base = mqtt.get('topic_base', '/home/device/{name}').replace('{name}', device_name)
+    ha_prefix = mqtt.get('ha_prefix', 'homeassistant')
     topic = base + '/control'
     ha = bool(mqtt.get('ha_discovery'))
     watched = {'status': base + '/status', 'state': base + '/state'}
     if ha:
-        watched.update({'ha_state': base + '/ha/state', 'ha_config': f'homeassistant/light/{device_name}/config'})
+        watched.update({'ha_state': base + '/ha/state', 'ha_config': f'{ha_prefix}/light/{device_name}/config'})
     seen = {}  # topic -> latest payload text
 
     client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id=f'smoke-test-{os.getpid()}')

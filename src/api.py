@@ -4,7 +4,7 @@ import ujson
 import machine
 import network
 from log import Log
-from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, is_valid_brightness
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, is_valid_brightness, mqtt_topics
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -70,6 +70,7 @@ class DeviceAPI:
                 ujson.dump({'name': safe_name}, f)
             self.device_name = safe_name
             Log.info(TAG, f'Device name set to: {safe_name}')
+            self._retire_old_topics()
             return True
         except OSError as e:
             Log.error(TAG, f'Failed to save device name: {e}')
@@ -179,6 +180,8 @@ class DeviceAPI:
                 'clean': dc.mqttconfig.clean,
                 'queue_len': dc.mqttconfig.queue_len,
                 'ha_discovery': dc.mqttconfig.ha_discovery,
+                'topic_base': self._config_cache['mqtt']['topic_base'],
+                'ha_prefix': self._config_cache['mqtt']['ha_prefix'],
             },
             'web': {
                 'password_set': bool(self.web_password_hash),
@@ -284,6 +287,15 @@ class DeviceAPI:
                 if v < 1:
                     return False, 'queue_len must be >= 1'
                 cfg['mqtt']['queue_len'] = v
+            if 'topic_base' in mqtt or 'ha_prefix' in mqtt:
+                import mqttstate
+                for key, check in (('topic_base', mqttstate.topic_base_error), ('ha_prefix', mqttstate.ha_prefix_error)):
+                    if key in mqtt:
+                        v = str(mqtt[key]).strip()
+                        error = check(v)
+                        if error:
+                            return False, error
+                        cfg['mqtt'][key] = v
 
             # Web section: set a new password, or clear it.
             web_updates = updates.get('web', {})
@@ -302,6 +314,7 @@ class DeviceAPI:
                 self.web_password_hash = new_hash
                 self.accepted_auth = None
             self._apply_live(cfg['device'])
+            self._retire_old_topics()
             Log.info(TAG, 'Config saved.' + (' Restart to apply it all.' if self.restart_required() else ''))
             return True, None
 
@@ -317,6 +330,19 @@ class DeviceAPI:
                 setattr(dc, key, dev[key])
         if Log.level != dc.log_level:
             Log.set_log_level(dc.log_level)
+
+    def _retire_old_topics(self):
+        """After a save or rename, note the retained topics in use now that the
+        saved settings won't use, so they're cleared after the restart."""
+        mq = self._config_cache['mqtt']
+        new = mqtt_topics(self.device_name, mq['topic_base'], mq['ha_prefix'])
+        import mqttstate
+        retired = mqttstate.retired_topics(self.device_config.mqttconfig.topics(), new)
+        if retired:
+            try:
+                DeviceConfig.retire_topics(retired)
+            except OSError as e:  # not worth failing the save over
+                Log.warn(TAG, f'Could not note the old MQTT topics: {e}')
 
     def restart_required(self):
         """True if saved settings (or a rename) differ from those running."""

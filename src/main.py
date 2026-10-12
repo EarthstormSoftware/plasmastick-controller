@@ -153,8 +153,7 @@ async def messages(client):
             Log.warn(TAG, f'Ignoring malformed MQTT control payload: {e}')
 
 def mqtt_topics():
-    import mqttstate
-    return mqttstate.topics(device_config.mqttconfig.client_id)
+    return device_config.mqttconfig.topics()
 
 def handle_ha_command(payload):
     import mqttstate
@@ -183,15 +182,28 @@ async def up(client):
         await client.up.wait()  # Wait on an Event
         client.up.clear()
         device_api.mqtt_error = None
-        await client.subscribe(device_config.get_control_topic(), 1)
+        await client.subscribe(t['control'], 1)
         Log.info(TAG,'Subscribed to Control Topic')
         if ha:
             await client.subscribe(t['ha_set'], 1)
         await client.publish(t['status'], mqttstate.ONLINE, retain=True)
+        await clear_retired_topics(client, t)
         # With discovery off, an empty retained config removes any earlier one.
-        discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, MODES, VERSION) if ha else ''
+        discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, t, MODES, VERSION) if ha else ''
         await client.publish(t['ha_config'], discovery, retain=True)
         led_strip.changed.set()  # publish the current state now that we're connected
+
+async def clear_retired_topics(client, t):
+    # Empty retained messages remove what was left on topics the device no
+    # longer uses (after a rename or a topic change), Home Assistant's old
+    # discovery config included.
+    current = t.values()
+    retired = [topic for topic in DeviceConfig.retired_topics() if topic not in current]
+    for topic in retired:
+        await client.publish(topic, '', retain=True)
+    if retired:
+        Log.info(TAG, f'Cleared {len(retired)} old retained topic(s)')
+    DeviceConfig.clear_retired_topics()
 
 async def publish_state(client):
     # Publishes the strip's state (retained) whenever it changes. Changes while
@@ -293,7 +305,7 @@ async def main(client):
             break
         except OSError as e:
             device_api.mqtt_error = mqtt_error_text(e)
-            Log.warn(TAG, f'MQTT connection failed ({e}): {device_api.mqtt_error} Will retry once WLAN is healthy.')
+            Log.warn(TAG, f'MQTT connection failed ({e}): {device_api.mqtt_error} Retrying in 2s.')
             await asyncio.sleep(2)
 
     while True:

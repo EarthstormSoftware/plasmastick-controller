@@ -25,7 +25,9 @@
         "password": "",
         "clean": true,
         "queue_len": 1,
-        "ha_discovery": false
+        "ha_discovery": false,
+        "topic_base": "/home/device/{name}",
+        "ha_prefix": "homeassistant"
     },
     "web": {
         "password": ""

@@ -17,10 +17,74 @@ def test_topics():
     assert t['ha_config'] == 'homeassistant/light/PorchLights/config'
 
 
-def test_control_topic_matches_the_existing_one(tmp_path, monkeypatch):
+def test_default_config_keeps_the_existing_topics(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cfg = DeviceConfig.loadConfigFromFile()
-    assert mqttstate.topics(cfg.mqttconfig.client_id)['control'] == cfg.get_control_topic()
+    assert cfg.mqttconfig.topics() == mqttstate.topics(cfg.mqttconfig.client_id)
+    assert cfg.mqttconfig.topics()['control'] == '/home/device/' + cfg.mqttconfig.client_id + '/control'
+
+
+def test_custom_topics():
+    t = mqttstate.topics('PorchLights', 'lights/{name}', 'ha')
+    assert t['control'] == 'lights/PorchLights/control'
+    assert t['ha_set'] == 'lights/PorchLights/ha/set'
+    assert t['ha_config'] == 'ha/light/PorchLights/config'
+    # A base without {name} suits a single device.
+    assert mqttstate.topics('PorchLights', 'porch')['state'] == 'porch/state'
+
+
+@pytest.mark.parametrize('base', ['/home/device/{name}', 'plasmastick/{name}', 'porch', 'a/{name}/b', 'my lights/{name}'])
+def test_good_topic_bases(base):
+    assert mqttstate.topic_base_error(base) is None
+
+
+@pytest.mark.parametrize('base, error', [
+    ('', 'topic_base cannot be empty'),
+    ('x' * 101, 'topic_base must be at most 100 characters'),
+    ('home/+/{name}', 'topic_base cannot contain the wildcards + or #'),
+    ('home/#', 'topic_base cannot contain the wildcards + or #'),
+    ('home\0', 'topic_base cannot contain a null character'),
+    (' home', 'topic_base cannot start or end with a space'),
+    ('home/{name}/', 'topic_base cannot end with /'),
+    ('home//{name}', 'topic_base cannot contain an empty level (//)'),
+    ('home/{id}', 'topic_base only understands the placeholder {name}'),
+])
+def test_bad_topic_bases(base, error):
+    assert mqttstate.topic_base_error(base) == error
+
+
+def test_ha_prefix_rules():
+    assert mqttstate.ha_prefix_error('homeassistant') is None
+    assert mqttstate.ha_prefix_error('ha/{name}') == 'ha_prefix cannot contain { or }'
+    assert mqttstate.ha_prefix_error('') == 'ha_prefix cannot be empty'
+
+
+def test_hand_edited_unusable_topics_fall_back_to_the_defaults(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'config.json').write_text(json.dumps({'mqtt': {'topic_base': 'bad/#', 'ha_prefix': ''}}))
+    cfg = DeviceConfig.loadConfigFromFile()
+    assert cfg.mqttconfig.topics() == mqttstate.topics(cfg.mqttconfig.client_id)
+
+
+def test_retired_topics_are_the_retained_ones_no_longer_used():
+    old = mqttstate.topics('Porch')
+    assert mqttstate.retired_topics(old, old) == []
+    moved = mqttstate.retired_topics(old, mqttstate.topics('Porch', 'lights/{name}'))
+    # The discovery config stays where it was, so it isn't cleared.
+    assert moved == ['/home/device/Porch/state', '/home/device/Porch/status', '/home/device/Porch/ha/state']
+    renamed = mqttstate.retired_topics(old, mqttstate.topics('Garden'))
+    assert 'homeassistant/light/Porch/config' in renamed and '/home/device/Porch/control' not in renamed
+
+
+def test_retired_topics_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert DeviceConfig.retired_topics() == []
+    DeviceConfig.retire_topics(['a/state', 'a/status'])
+    DeviceConfig.retire_topics(['a/status', 'b/state'])
+    assert DeviceConfig.retired_topics() == ['a/state', 'a/status', 'b/state']
+    DeviceConfig.clear_retired_topics()
+    assert DeviceConfig.retired_topics() == []
+    DeviceConfig.clear_retired_topics()  # nothing to clear is fine
 
 
 def test_state_payloads():
@@ -36,7 +100,7 @@ def test_state_payloads():
 
 
 def test_discovery_payload():
-    config = json.loads(mqttstate.ha_discovery_payload('PorchLights', MODES))
+    config = json.loads(mqttstate.ha_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), MODES))
     assert config['schema'] == 'json'
     assert config['unique_id'] == 'PorchLights_light'
     assert config['command_topic'] == '/home/device/PorchLights/ha/set'

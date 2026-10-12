@@ -3,29 +3,76 @@
 Pure functions, so they can be tested off the device. main.py does the
 publishing and subscribing.
 
-  /home/device/<id>/control   commands (StateChange / ModeChange / BrightnessChange)
-  /home/device/<id>/state     retained: {"State", "Mode", "ModeParameters", "Brightness"}
-  /home/device/<id>/status    retained: "online", or "offline" (the will)
-  /home/device/<id>/ha/state  retained: state in Home Assistant's JSON light schema
-  /home/device/<id>/ha/set    Home Assistant JSON light commands
-  homeassistant/light/<id>/config   retained discovery config (if enabled)
+The topics hang off a configurable base (mqtt.topic_base, where {name} is the
+device name) and Home Assistant discovery prefix (mqtt.ha_prefix):
+
+  <base>/control      commands (StateChange / ModeChange / BrightnessChange)
+  <base>/state        retained: {"State", "Mode", "ModeParameters", "Brightness"}
+  <base>/status       retained: "online", or "offline" (the will)
+  <base>/ha/state     retained: state in Home Assistant's JSON light schema
+  <base>/ha/set       Home Assistant JSON light commands
+  <ha_prefix>/light/<name>/config   retained discovery config (if enabled)
 """
 import ujson
 
 ONLINE = 'online'
 OFFLINE = 'offline'
 
+DEFAULT_TOPIC_BASE = '/home/device/{name}'
+DEFAULT_HA_PREFIX = 'homeassistant'
+MAX_TOPIC_PREFIX_LEN = 100
 
-def topics(client_id):
-    base = '/home/device/' + client_id
+# The topics the device publishes retained, so ones it stops using need clearing.
+RETAINED = ('state', 'status', 'ha_state', 'ha_config')
+
+
+def _prefix_error(value, setting, placeholder):
+    if not isinstance(value, str) or not value:
+        return setting + ' cannot be empty'
+    if len(value) > MAX_TOPIC_PREFIX_LEN:
+        return setting + ' must be at most ' + str(MAX_TOPIC_PREFIX_LEN) + ' characters'
+    if '+' in value or '#' in value:
+        return setting + ' cannot contain the wildcards + or #'
+    if '\0' in value:
+        return setting + ' cannot contain a null character'
+    if value != value.strip():
+        return setting + ' cannot start or end with a space'
+    if value.endswith('/'):
+        return setting + ' cannot end with /'
+    if '//' in value:
+        return setting + ' cannot contain an empty level (//)'
+    rest = value.replace('{name}', '') if placeholder else value
+    if '{' in rest or '}' in rest:
+        return setting + (' only understands the placeholder {name}' if placeholder else ' cannot contain { or }')
+    return None
+
+
+def topic_base_error(base):
+    """None if base works as mqtt.topic_base, else why not (starting with the setting's name)."""
+    return _prefix_error(base, 'topic_base', True)
+
+
+def ha_prefix_error(prefix):
+    """None if prefix works as mqtt.ha_prefix, else why not."""
+    return _prefix_error(prefix, 'ha_prefix', False)
+
+
+def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX):
+    base = base.replace('{name}', client_id)
     return {
         'control': base + '/control',
         'state': base + '/state',
         'status': base + '/status',
         'ha_state': base + '/ha/state',
         'ha_set': base + '/ha/set',
-        'ha_config': 'homeassistant/light/' + client_id + '/config',
+        'ha_config': ha_prefix + '/light/' + client_id + '/config',
     }
+
+
+def retired_topics(old, new):
+    """The retained topics in old (a topics() dict) that new no longer uses."""
+    current = new.values()
+    return [old[k] for k in RETAINED if old[k] not in current]
 
 
 def _rgb(colour):
@@ -48,8 +95,8 @@ def ha_state_payload(report):
     return ujson.dumps(payload)
 
 
-def ha_discovery_payload(client_id, modes, sw_version=None):
-    t = topics(client_id)
+def ha_discovery_payload(client_id, t, modes, sw_version=None):
+    """t: the device's topics() dict."""
     device = {'identifiers': [client_id], 'name': client_id,
               'manufacturer': 'Pimoroni', 'model': 'Plasma Stick 2040 W'}
     if sw_version:

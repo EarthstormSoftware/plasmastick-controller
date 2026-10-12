@@ -110,20 +110,25 @@ to its default (including the MQTT settings, web password and a name set in the 
 
 ## MQTT
 
-With MQTT enabled (MQTT tab, or `mqtt` in `config.json`), the device uses these topics, where `<name>` is its device
-name:
+With MQTT enabled (MQTT tab, or `mqtt` in `config.json`), the device uses these topics under its topic base
+(`mqtt.topic_base`). The base defaults to `/home/device/{name}`, where `{name}` is replaced by the device name, so
+`<base>` below is `/home/device/<name>` unless it's been changed:
 
 | Topic | Direction | Contents |
 |---|---|---|
-| `/home/device/<name>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}`, `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` or `{"MessageType": "BrightnessChange", "Parameters": {"Brightness": 40}}` (percent, 1-100) |
-| `/home/device/<name>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}, "Brightness": 100}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
-| `/home/device/<name>/status` | from the device, retained | `online` while connected. The broker sets `offline` (the MQTT will) if the device drops off |
+| `<base>/control` | to the device | `{"MessageType": "StateChange", "Parameters": {"State": true}}`, `{"MessageType": "ModeChange", "Parameters": {"Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}}}` or `{"MessageType": "BrightnessChange", "Parameters": {"Brightness": 40}}` (percent, 1-100) |
+| `<base>/state` | from the device, retained | `{"State": true, "Mode": "Colour", "ModeParameters": {"Colour": "#ffc0cb"}, "Brightness": 100}`, published on every change. The colour is what's showing, including the latest CheerLights colour; it's empty in Rainbows mode |
+| `<base>/status` | from the device, retained | `online` while connected. The broker sets `offline` (the MQTT will) if the device drops off |
 
 With **Home Assistant discovery** turned on (`mqtt.ha_discovery`), the device also publishes a retained discovery
-config to `homeassistant/light/<name>/config`, so it appears in Home Assistant as a light with an RGB colour,
-brightness and the modes as effects. Home Assistant controls it through `/home/device/<name>/ha/set` and reads
-`/home/device/<name>/ha/state`, both in Home Assistant's JSON light schema. Turning discovery off removes the entity
+config to `homeassistant/light/<name>/config` (the `homeassistant` prefix is `mqtt.ha_prefix`), so it appears in Home Assistant as a light with an RGB colour,
+brightness and the modes as effects. Home Assistant controls it through `<base>/ha/set` and reads
+`<base>/ha/state`, both in Home Assistant's JSON light schema. Turning discovery off removes the entity
 on the next connection.
+
+Changing the topic base, the discovery prefix or the device name restarts the device. On its next connection it
+clears the retained messages it left on the old topics, so nothing stale is left on the broker or in Home
+Assistant.
 
 ## Project layout
 

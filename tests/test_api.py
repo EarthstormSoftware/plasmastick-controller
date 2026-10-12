@@ -37,6 +37,8 @@ def test_save_writes_changes_on_top_of_the_merged_config(api):
     ({'wlan': {'connect_timeout': 1}}, 'connect_timeout must be >= 5'),
     ({'mqtt': {'password': ''}}, 'MQTT password cannot be empty'),
     ({'mqtt': {'queue_len': 0}}, 'queue_len must be >= 1'),
+    ({'mqtt': {'topic_base': 'home/#'}}, 'topic_base cannot contain the wildcards + or #'),
+    ({'mqtt': {'ha_prefix': ''}}, 'ha_prefix cannot be empty'),
 ])
 def test_invalid_updates_are_rejected(api, updates, error):
     assert api.save_config(updates) == (False, error)
@@ -156,6 +158,8 @@ def test_log_level_applies_at_once(api):
     {'device': {'device_led_count': 50}},
     {'wlan': {'reconnect_wait': 45}},
     {'mqtt': {'broker_address': 'mqtt.local'}},
+    {'mqtt': {'topic_base': 'lights/{name}'}},
+    {'mqtt': {'ha_prefix': 'ha'}},
 ])
 def test_boot_only_settings_need_a_restart(api, updates):
     api.save_config(updates)
@@ -191,3 +195,25 @@ def test_default_brightness_is_saved_checked_and_applied_live(api):
     assert saved_config(api)['device']['default_brightness'] == 25
     assert api.get_config()['device']['default_brightness'] == 25
     assert not api.restart_required()
+
+
+def test_topic_settings_are_shown_and_saved_trimmed(api):
+    mq = api.get_config()['mqtt']
+    assert (mq['topic_base'], mq['ha_prefix']) == ('/home/device/{name}', 'homeassistant')
+    assert api.save_config({'mqtt': {'topic_base': ' lights/{name} ', 'ha_prefix': 'ha'}}) == (True, None)
+    assert saved_config(api)['mqtt']['topic_base'] == 'lights/{name}'
+    assert api.get_config()['mqtt']['topic_base'] == 'lights/{name}'
+
+
+def test_changing_topics_retires_the_old_retained_ones(api):
+    running = api.device_config.mqttconfig.topics()
+    api.save_config({'mqtt': {'user': 'me'}})
+    assert DeviceConfig.retired_topics() == []
+    api.save_config({'mqtt': {'topic_base': 'lights/{name}'}})
+    assert DeviceConfig.retired_topics() == [running['state'], running['status'], running['ha_state']]
+
+
+def test_a_rename_retires_the_old_retained_topics(api):
+    running = api.device_config.mqttconfig.topics()
+    assert api.set_device_name('kitchen')
+    assert running['ha_config'] in DeviceConfig.retired_topics()

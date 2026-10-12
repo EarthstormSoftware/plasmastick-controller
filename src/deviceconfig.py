@@ -42,6 +42,9 @@ _DEFAULT_CONFIG = {
         "queue_len": 1,
         # Announce the device to Home Assistant over MQTT discovery.
         "ha_discovery": False,
+        # Where the topics go: {name} is the device name (see mqttstate.py).
+        "topic_base": "/home/device/{name}",
+        "ha_prefix": "homeassistant",
     },
     "web": {
         # A hash of the password (see passwords.py). Empty: the web UI and API
@@ -52,6 +55,7 @@ _DEFAULT_CONFIG = {
 
 
 DEVICE_NAME_FILE = "device_name.json"
+RETIRED_TOPICS_FILE = "retired_topics.json"
 
 
 def is_valid_brightness(value):
@@ -185,8 +189,30 @@ class DeviceConfig:
     def is_mqtt_enabled(self):
         return self.mqttconfig.is_enabled()
     
-    def get_control_topic(self):
-        return '/home/device/' + self.mqttconfig.client_id + '/control'
+    @staticmethod
+    def retire_topics(topics):
+        """Remember retained topics the device has stopped using (after a rename or
+        a topic change), so they're cleared once MQTT next connects."""
+        retired = DeviceConfig.retired_topics()
+        retired += [t for t in topics if t not in retired]
+        with open(RETIRED_TOPICS_FILE, 'w') as fp:
+            ujson.dump(retired, fp)
+
+    @staticmethod
+    def retired_topics():
+        try:
+            with open(RETIRED_TOPICS_FILE) as fp:
+                retired = ujson.load(fp)
+            return retired if isinstance(retired, list) else []
+        except (OSError, ValueError):
+            return []
+
+    @staticmethod
+    def clear_retired_topics():
+        try:
+            os.remove(RETIRED_TOPICS_FILE)
+        except OSError:
+            pass
 
     @staticmethod
     def provisioning_needed():
@@ -334,9 +360,18 @@ class MQTTConfig:
         self.clean = mqttconfig.get("clean", True)
         self.queue_len = mqttconfig.get("queue_len", 1)
         self.ha_discovery = bool(mqttconfig.get("ha_discovery", False))
+        self.topic_base = mqttconfig.get("topic_base", "")
+        self.ha_prefix = mqttconfig.get("ha_prefix", "")
+        self._topics = None
 
     def is_enabled(self):
         return bool(self.enabled) and bool(self.broker_address)
+
+    def topics(self):
+        """The device's topics (see mqttstate.topics), worked out once."""
+        if self._topics is None:
+            self._topics = mqtt_topics(self.client_id, self.topic_base, self.ha_prefix)
+        return self._topics
 
     def to_mqtt_as_config(self):
         from mqtt_as import config as mqtt_config  # only loaded when MQTT is used
@@ -348,7 +383,19 @@ class MQTTConfig:
         cfg["clean"] = self.clean
         cfg["queue_len"] = self.queue_len
         # The broker publishes this if the device drops off without saying goodbye.
-        from mqttstate import topics, OFFLINE
-        cfg["will"] = (topics(self.client_id)['status'], OFFLINE, True, 0)
+        from mqttstate import OFFLINE
+        cfg["will"] = (self.topics()['status'], OFFLINE, True, 0)
         return cfg
 
+
+def mqtt_topics(client_id, base, prefix):
+    """mqttstate.topics(), except that a hand-edited base or prefix that isn't
+    usable falls back to the default."""
+    import mqttstate
+    if mqttstate.topic_base_error(base):
+        Log.warn(TAG, f'Unusable mqtt.topic_base {base!r}; using {mqttstate.DEFAULT_TOPIC_BASE}')
+        base = mqttstate.DEFAULT_TOPIC_BASE
+    if mqttstate.ha_prefix_error(prefix):
+        Log.warn(TAG, f'Unusable mqtt.ha_prefix {prefix!r}; using {mqttstate.DEFAULT_HA_PREFIX}')
+        prefix = mqttstate.DEFAULT_HA_PREFIX
+    return mqttstate.topics(client_id, base, prefix)
