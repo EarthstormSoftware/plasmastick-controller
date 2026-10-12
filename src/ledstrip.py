@@ -3,7 +3,7 @@ import plasma
 import uasyncio as asyncio
 import asynchttp
 from log import Log
-from deviceconfig import DEFAULT_COLOUR, CHRISTMAS_STYLES
+from deviceconfig import DEFAULT_COLOUR, CHRISTMAS_STYLES, is_valid_speed
 
 TAG = "LEDS"
 
@@ -44,6 +44,8 @@ def mode_parameters_error(mode, parameters):
         return 'Colour must be a #RRGGBB hex colour'
     if mode == 'Christmas' and 'Style' in parameters and parameters['Style'] not in CHRISTMAS_STYLES:
         return 'Style must be one of ' + ', '.join(CHRISTMAS_STYLES)
+    if mode in EFFECT_MODES and 'Speed' in parameters and not is_valid_speed(parameters['Speed']):
+        return 'Speed must be a whole number, 1-10'
     return None
 
 class LedStrip:
@@ -216,7 +218,14 @@ class LedStrip:
     def report(self):
         """What the strip is showing: {'state', 'mode', 'colour'}."""
         return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour,
-                'style': self.style(), 'brightness': self.brightness}
+                'style': self.style(), 'speed': self.speed(), 'brightness': self.brightness}
+
+    def speed(self):
+        """The animation's speed (the request's, else device.effect_speed), or None in other modes."""
+        if self.current_mode not in EFFECT_MODES:
+            return None
+        speed = self.mode_parameters.get('Speed') if isinstance(self.mode_parameters, dict) else None
+        return speed if is_valid_speed(speed) else self.device_config.effect_speed
 
     def style(self):
         """The Christmas style showing (the request's, else the default), or None in other modes."""
@@ -272,6 +281,7 @@ class LedStrip:
             reverse = dc.led_reverse and dc.led_layout != 'bottle'
             self._effect = effects.EFFECTS[self.current_mode](dc.device_led_count, dc.led_layout, reverse, style)
             self._effect_layout, self._effect_reverse, self._effect_style = dc.led_layout, dc.led_reverse, style
+        self._effect.speed = self.speed()  # changes without a restart
         return self._effect
 
     async def controller(self):
@@ -299,6 +309,7 @@ class LedStrip:
                     if self.mode_will_change:
                         self.set_mode(self.next_mode)
                         was_colour = False
+                        self._effect = None  # a new animation starts afresh; the same one carries on
 
                     Log.debug(TAG, 'State / Mode change, so reinitialise')
                     if self.current_mode == 'Colour':
@@ -314,7 +325,6 @@ class LedStrip:
                     # CheerLights keeps the last fetched colour until a new one arrives.
                     self.changed.set()
                     self.cheerlights_last_update = 0
-                    self._effect = None  # animations start afresh
 
                 if repaint:
                     self._fade_to(self._output if self.current_state else 0.0, ms)

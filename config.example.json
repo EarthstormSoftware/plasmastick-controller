@@ -15,7 +15,8 @@
         "christmas_style": "Twinkle",
         "watchdog": true,
         "ntp_server": "pool.ntp.org",
-        "transition_ms": 500
+        "transition_ms": 500,
+        "effect_speed": 5
     },
     "wlan": {
         "ssid": "",

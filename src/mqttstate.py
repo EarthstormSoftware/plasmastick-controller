@@ -116,12 +116,22 @@ def _rgb(colour):
     return {'r': int(digits[0:2], 16), 'g': int(digits[2:4], 16), 'b': int(digits[4:6], 16)}
 
 
+def _parameters(report, colour=True):
+    """ModeParameters for a report: the colour showing, the Christmas style, the speed."""
+    parameters = {}
+    if colour and report.get('colour'):
+        parameters['Colour'] = report['colour']
+    if report.get('style'):
+        parameters['Style'] = report['style']
+    if report.get('speed'):
+        parameters['Speed'] = report['speed']
+    return parameters
+
+
 def state_payload(report):
     """report: {'state': bool, 'mode': str, 'colour': '#rrggbb' or None, 'style': str or None,
-    'brightness': 1-100}."""
-    parameters = ({'Colour': report['colour']} if report.get('colour') else
-                  {'Style': report['style']} if report.get('style') else {})
-    return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': parameters,
+    'speed': 1-10 or None, 'brightness': 1-100}."""
+    return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': _parameters(report),
                         'Brightness': report['brightness']})
 
 
@@ -131,34 +141,33 @@ def info_payload(info):
                         'ip': info['wifi']['ip'], 'mem_free': info['mem_free']})
 
 
-# The mode parameter each mode is defined by, for a group (CheerLights fetches
-# its own colour, and the animations have none apart from Christmas's style).
-GROUP_PARAMETER = {'Colour': 'Colour', 'Christmas': 'Style'}
+# The report keys behind each mode parameter a group passes on (CheerLights
+# members fetch their own colour, so only Colour mode's colour goes).
+_GROUP_KEYS = (('Colour', 'colour'), ('Style', 'style'), ('Speed', 'speed'))
 
 
 def group_payload(report, client_id):
     """The group's new state after a local change: like the state payload, with
-    only the parameter that defines the mode, and who sent it."""
-    key = GROUP_PARAMETER.get(report['mode'])
-    value = report.get('colour' if key == 'Colour' else 'style') if key else None
+    only the parameters that define the mode, and who sent it."""
     return ujson.dumps({'State': report['state'], 'Mode': report['mode'],
-                        'ModeParameters': {key: value} if value else {},
+                        'ModeParameters': _parameters(report, colour=report['mode'] == 'Colour'),
                         'Brightness': report['brightness'], 'From': client_id})
 
 
 def group_actions(group, current, follow_brightness):
     """What following the group (from parse_group) changes, given what the device
-    shows now (current: {'state', 'mode', 'colour', 'style', 'brightness'}):
+    shows now (current: {'state', 'mode', 'colour', 'style', 'speed', 'brightness'}):
     ('power', bool), ('mode', name, parameters or None) and ('brightness', n).
     Only differences, so a device's own message coming back changes nothing."""
     actions = []
     if group['state'] != current['state']:
         actions.append(('power', group['state']))
-    key = GROUP_PARAMETER.get(group['mode'])
-    wanted = group['parameters'].get(key) if key else None
-    shown = current.get('colour' if key == 'Colour' else 'style') if key else None
-    if group['mode'] != current['mode'] or (wanted and str(wanted).lower() != str(shown or '').lower()):
-        actions.append(('mode', group['mode'], {key: wanted} if wanted else None))
+    wanted = {k: group['parameters'][k] for k, _ in _GROUP_KEYS if group['parameters'].get(k) is not None
+              and (k != 'Colour' or group['mode'] == 'Colour')}
+    differs = any(str(v).lower() != str(current.get(r) or '').lower() for k, r in _GROUP_KEYS
+                  for v in [wanted.get(k)] if v is not None)
+    if group['mode'] != current['mode'] or differs:
+        actions.append(('mode', group['mode'], wanted or None))
     if follow_brightness and group['brightness'] != current['brightness']:
         actions.append(('brightness', group['brightness']))
     return actions

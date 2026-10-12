@@ -11,6 +11,9 @@ API, MQTT, or the button on the board.
   **Twinkle** (red, green, gold and blue bulbs, each gently brightening and dimming) and **Fade** (each bulb fades
   into the next colour, so the pattern drifts). Ask for one with `"ModeParameters": {"Style": "Fade"}`; without one,
   the default style (`device.christmas_style`, Device tab) is used, as when Home Assistant picks the effect.
+  The animations have a speed, 1-10 (`"ModeParameters": {"Speed": 7}`, or the Control tab's slider); without one,
+  `device.effect_speed` (5) is used. Changing the speed, or choosing the mode that's already showing, doesn't
+  restart the animation.
   CheerLights polls `device.cheerlights_url` (default
   `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
   entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for

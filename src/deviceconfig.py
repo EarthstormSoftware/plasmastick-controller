@@ -37,6 +37,8 @@ _DEFAULT_CONFIG = {
         "ntp_server": "pool.ntp.org",
         # How long power, brightness and colour changes fade for; 0: instant.
         "transition_ms": 500,
+        # How fast the animations run when a request doesn't say: 1-10.
+        "effect_speed": 5,
     },
     "wlan": {
         "ssid": "",
@@ -74,6 +76,11 @@ DEVICE_NAME_FILE = "device_name.json"
 LED_LAYOUTS = ("bottle", "horizontal", "vertical")
 CHRISTMAS_STYLES = ("Twinkle", "Fade")
 RETIRED_TOPICS_FILE = "retired_topics.json"
+
+
+def is_valid_speed(value):
+    """True for an animation speed: a whole number, 1-10 (5 the usual)."""
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 10
 
 
 def is_valid_transition(value):
@@ -168,7 +175,7 @@ def _load_provisioning_data():
 
 
 class DeviceConfig:
-    
+
     def __init__(self, configdata):
         # Device name priority: renamed in the web UI/API, then set during
         # provisioning, then config.json, then generated from the board's unique id.
@@ -183,7 +190,7 @@ class DeviceConfig:
         self.device_led_rgbw = configdata["device"]["device_led_rgbw"]
         self.default_mode = configdata["device"]["default_mode"]
         self.mode_parameters = configdata["device"]["mode_parameters"]
-        self.default_state = configdata["device"]["default_state"]                
+        self.default_state = configdata["device"]["default_state"]
         self.cheerlights_url = configdata["device"]["cheerlights_url"]
         self.cheerlights_update_interval = configdata["device"]["cheerlights_update_interval"]
         self.log_level = configdata["device"]["log_level"]
@@ -201,6 +208,10 @@ class DeviceConfig:
             self.christmas_style = "Twinkle"
         self.watchdog = bool(configdata["device"]["watchdog"])
         self.ntp_server = str(configdata["device"]["ntp_server"] or "")
+        self.effect_speed = configdata["device"]["effect_speed"]
+        if not is_valid_speed(self.effect_speed):
+            Log.warn(TAG, f'Ignoring effect_speed {self.effect_speed!r}; it must be 1-10')
+            self.effect_speed = 5
         self.transition_ms = configdata["device"]["transition_ms"]
         if not is_valid_transition(self.transition_ms):
             Log.warn(TAG, f'Ignoring transition_ms {self.transition_ms!r}; it must be 0-10000')
@@ -214,10 +225,10 @@ class DeviceConfig:
         self.mqttconfig = MQTTConfig(self.device_name, configdata["mqtt"])
         self.web_password_hash = configdata["web"].get("password_hash", "")
         Log.info(TAG, f'Using device name: {self.device_name}')
-        
+
     def get_wlanconfig(self):
         return self.wlanconfig
-    
+
     def get_mqttconfig(self):
         return self.mqttconfig
 
@@ -226,7 +237,7 @@ class DeviceConfig:
 
     def is_mqtt_enabled(self):
         return self.mqttconfig.is_enabled()
-    
+
     @staticmethod
     def retire_topics(topics):
         """Remember retained topics the device has stopped using (after a rename or
@@ -309,7 +320,7 @@ class DeviceConfig:
                 Log.warn(TAG, f'Could not save the converted passwords: {e}')
 
         return DeviceConfig(_merge_with_defaults(configdata))
-    
+
     @staticmethod
     def clear_web_password():
         """Remove the web password from config.json. Setup mode does this, so
@@ -355,9 +366,9 @@ class DeviceConfig:
     def saveConfigToFile(configdata):
         Log.info(TAG,'Saving configuration to file')
         with open('config.json', 'w') as f:
-            ujson.dump(configdata, f)    
-                
-    
+            ujson.dump(configdata, f)
+
+
 class WlanConfig:
     def __init__(self, wlanconfig):
         # Check provisioning file first, fall back to config dict
@@ -370,11 +381,11 @@ class WlanConfig:
             self.ssid = wlanconfig["ssid"]
             self.password = wlanconfig["password"]
             Log.info(TAG, f'Using config.json SSID: {self.ssid}')
-        
+
         self.connect_timeout = wlanconfig["connect_timeout"]
         self.reconnect_wait = wlanconfig["reconnect_wait"]
         self.max_retries = wlanconfig["max_retries"]
-    
+
     @staticmethod
     def _load_provisioning():
         """Try to load provisioning.json with WiFi credentials."""

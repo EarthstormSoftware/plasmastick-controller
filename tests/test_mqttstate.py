@@ -165,12 +165,14 @@ def test_strip_reports_what_it_shows_and_signals_changes(tmp_path, monkeypatch):
         return on_pink, rainbows, christmas, fade
 
     on_pink, rainbows, christmas, fade = asyncio.run(go())
-    assert on_pink == {'state': True, 'mode': 'Colour', 'colour': '#ffc0cb', 'style': None, 'brightness': 66}
-    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'style': None, 'brightness': 66}
-    # No style asked for: the default.
-    assert christmas == {'state': True, 'mode': 'Christmas', 'colour': None, 'style': 'Twinkle', 'brightness': 66}
+    assert on_pink == {'state': True, 'mode': 'Colour', 'colour': '#ffc0cb', 'style': None, 'speed': None,
+                       'brightness': 66}
+    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'style': None, 'speed': 5, 'brightness': 66}
+    # No style or speed asked for: the defaults.
+    assert christmas == {'state': True, 'mode': 'Christmas', 'colour': None, 'style': 'Twinkle', 'speed': 5,
+                         'brightness': 66}
     assert fade['style'] == 'Fade'
-    assert json.loads(mqttstate.state_payload(fade))['ModeParameters'] == {'Style': 'Fade'}
+    assert json.loads(mqttstate.state_payload(fade))['ModeParameters'] == {'Style': 'Fade', 'Speed': 5}
 
 
 def test_brightness_scales_what_is_painted_and_signals_a_change(tmp_path, monkeypatch):
@@ -269,7 +271,7 @@ def test_group_names(group, ok):
 
 
 def report(**kw):
-    r = {'state': True, 'mode': 'Colour', 'colour': '#ffb46b', 'style': None, 'brightness': 66}
+    r = {'state': True, 'mode': 'Colour', 'colour': '#ffb46b', 'style': None, 'speed': None, 'brightness': 66}
     r.update(kw)
     return r
 
@@ -317,3 +319,11 @@ def test_unusable_group_messages_are_refused_whole(payload):
     from ledstrip import mode_parameters_error
     with pytest.raises(ValueError):
         mqttstate.parse_group(payload, MODES, mode_parameters_error)
+
+
+def test_groups_carry_the_speed():
+    rep = report(mode='Christmas', colour=None, style='Fade', speed=8)
+    assert json.loads(mqttstate.group_payload(rep, 'P'))['ModeParameters'] == {'Style': 'Fade', 'Speed': 8}
+    assert mqttstate.group_actions(roundtrip(rep), rep, True) == []
+    assert mqttstate.group_actions(roundtrip(rep), dict(rep, speed=5), True) == [
+        ('mode', 'Christmas', {'Style': 'Fade', 'Speed': 8})]

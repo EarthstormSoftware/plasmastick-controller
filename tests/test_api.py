@@ -354,3 +354,11 @@ def test_fade_time_is_checked_and_applies_live(api):
     assert api.device_config.transition_ms == 1500 and not api.restart_required()
     assert api.save_config({'device': {'transition_ms': 10001}}) == (False, 'transition_ms must be a whole number, 0-10000')
     assert api.save_config({'device': {'transition_ms': 0.5}})[0] is False
+
+
+def test_default_speed_is_checked_and_applies_live(api):
+    assert api.get_config()['device']['effect_speed'] == 5
+    assert api.save_config({'device': {'effect_speed': 8}}) == (True, None)
+    assert api.device_config.effect_speed == 8 and not api.restart_required()
+    assert api.save_config({'device': {'effect_speed': 0}}) == (False, 'effect_speed must be a whole number, 1-10')
+    assert api.set_mode('Fire', {'Speed': 2}) and not api.set_mode('Fire', {'Speed': 'fast'})

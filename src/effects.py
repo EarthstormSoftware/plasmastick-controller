@@ -12,6 +12,9 @@ Layouts (device.led_layout): 'bottle' (LEDs jumbled), 'horizontal' and
 'vertical' strips. reverse flips a strip's direction: a vertical strip's first
 LED is then at the top, and a horizontal strip's patterns travel the other way.
 
+Each has a speed (1-10, 5 the usual), set by LedStrip and read every frame,
+so it changes without restarting the animation.
+
 Imported the first time an animated mode runs, so it costs no heap until then.
 """
 
@@ -19,6 +22,11 @@ import math
 from random import getrandbits
 
 FRAME_MS = 33  # about 30 frames a second
+
+
+def frame_ms(speed):
+    """For the flickering effects, speed sets the frame rate: 5 is FRAME_MS."""
+    return FRAME_MS * 5 // speed
 
 # One turn of a sine wave in 256 steps, 0-255 centred on 128. Made once, here,
 # so frames only look values up.
@@ -66,6 +74,7 @@ class Rainbows:
     # Hue moved per frame, in 1/256ths of a colour-table step: a full turn
     # takes about 6.7 s, as it did at 60 frames a second.
     STEP = 328
+    speed = 5
 
     def __init__(self, n, layout, reverse, style=None):
         self.n = n
@@ -79,7 +88,7 @@ class Rainbows:
     def frame(self, strip, output):
         if output != self.output:
             self.output, self.level = output, level(output)
-        self.offset = (self.offset + self.STEP) & 0xFFFF
+        self.offset = (self.offset + self.STEP * self.speed // 5) & 0xFFFF
         off, t, pos, lv = self.offset >> 8, self.table, self.pos, self.level
         for i in range(self.n):
             k = ((pos[i] + off) & 255) * 3
@@ -99,6 +108,8 @@ def heat_rgb(h):
 class Fire:
     """Flames, shaped by the layout: a bottle of embers, flames rising up a
     vertical strip, or a row of flame tips along a horizontal one."""
+
+    speed = 5
 
     def __init__(self, n, layout, reverse, style=None):
         self.n = n
@@ -123,7 +134,7 @@ class Fire:
         if output != self.output:
             self.output, self.level = output, level(output)
         self.step(strip)
-        return FRAME_MS
+        return frame_ms(self.speed)
 
     def _draw(self, strip, heat, flip):
         t, last, lv = self.table, self.n - 1, self.level
@@ -197,9 +208,12 @@ class Ocean:
     and depth up a vertical strip (deep at the bottom, light at the surface).
     Now and then an LED catches the light."""
 
+    speed = 5
+
     def __init__(self, n, layout, reverse, style=None):
         self.n = n
         self.t = 0
+        self.ticks = 0  # time in fifths of a frame step, so speed scales it smoothly
         self.dir = -1 if reverse and layout == 'horizontal' else 1
         self.level = bytearray(n)
         self.glint = bytearray(n)
@@ -222,7 +236,8 @@ class Ocean:
     def frame(self, strip, output):
         if output != self.output:
             self.output, self.level = output, level(output)
-        self.t = t = (self.t + 1) & 0xFFFF
+        self.ticks = (self.ticks + self.speed) & 0x3FFFF
+        self.t = t = (self.ticks // 5) & 0xFFFF
         d = self.dir
         n, base, glint, table, amp, lv = self.n, self.base, self.glint, self.table, self.amp, self.level
         swell = SINE[t & 255] - 128  # the whole sea rising and falling, about 8.5 s a cycle
@@ -257,12 +272,14 @@ class Christmas:
     # Fade: steps per colour (256) moved per frame: about 8.5 s per colour,
     # holding for the first FADE_HOLD of them and fading over the rest.
     FADE_HOLD = 160
+    speed = 5
 
     def __init__(self, n, layout, reverse, style=None):
         self.n = n
         self.fade = style == 'Fade'
         self.dir = -1 if reverse else 1
         self.phase = 0
+        self.ticks = 0  # Fade's time in fifths of a step, so speed scales it smoothly
         self.colours = bytearray(12)  # the four bulbs at the current brightness
         self.floor = bytearray(4)  # per bulb, the least twinkle level that keeps it lit
         self.output = -1
@@ -292,9 +309,9 @@ class Christmas:
             self._scale(output)
         if self.fade:
             self._fade(strip)
-        else:
-            self._twinkle(strip)
-        return FRAME_MS
+            return FRAME_MS
+        self._twinkle(strip)
+        return frame_ms(self.speed)
 
     def _twinkle(self, strip):
         cols, level, target, floor = self.colours, self.level, self.target, self.floor
@@ -312,7 +329,8 @@ class Christmas:
             strip.set_rgb(i, (cols[k] * h + 128) >> 8, (cols[k + 1] * h + 128) >> 8, (cols[k + 2] * h + 128) >> 8)
 
     def _fade(self, strip):
-        self.phase = (self.phase + 1) & 0x3FF
+        self.ticks = (self.ticks + self.speed) & 0x3FFF
+        self.phase = (self.ticks // 5) & 0x3FF
         step, frac = self.phase >> 8, self.phase & 255
         ramp = 0 if frac < self.FADE_HOLD else (frac - self.FADE_HOLD) * 256 // (256 - self.FADE_HOLD)
         cols, d = self.colours, self.dir

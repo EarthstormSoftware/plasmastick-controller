@@ -304,3 +304,50 @@ def test_a_fade_changes_only_the_brightness_not_the_colours(name):
     for step in range(20):
         effect.frame(strip, 0.2 + step * 0.04)
     assert getattr(effect, 'table', None) is table
+
+
+def test_speed_scales_the_smooth_effects_and_the_flicker_rate():
+    slow, usual, fast = (effects.Rainbows(10, 'bottle', False) for _ in range(3))
+    slow.speed, fast.speed = 1, 10
+    strip = Strip(10)
+    for e in (slow, usual, fast):
+        e.frame(strip, 1.0)
+    assert slow.offset < usual.offset < fast.offset
+    assert effects.frame_ms(5) == effects.FRAME_MS and effects.frame_ms(10) < effects.FRAME_MS < effects.frame_ms(1)
+    fire = effects.Fire(10, 'bottle', False)
+    fire.speed = 10
+    assert fire.frame(strip, 1.0) == effects.frame_ms(10)
+
+
+def test_speed_is_checked_and_changes_without_restarting(strip):
+    from ledstrip import mode_parameters_error
+    assert mode_parameters_error('Rainbows', {'Speed': 7}) is None
+    assert mode_parameters_error('Rainbows', {'Speed': 11}) == 'Speed must be a whole number, 1-10'
+    assert mode_parameters_error('Colour', {'Speed': 11}) is None  # only the animations have a speed
+    strip.current_mode = 'Rainbows'
+    first = strip._animation()
+    assert first.speed == 5
+    strip.mode_parameters = {'Speed': 9}
+    assert strip._animation() is first and first.speed == 9
+    strip.mode_parameters = {}
+    strip.device_config.effect_speed = 3
+    assert strip._animation().speed == 3
+
+
+def test_reselecting_a_mode_carries_the_animation_on(strip):
+    async def go():
+        strip.set_next_state(True)
+        strip.set_next_mode('Rainbows')
+        task = asyncio.create_task(strip.controller())
+        await asyncio.sleep(0.1)
+        first = strip._effect
+        strip.set_next_mode('Rainbows', {'Speed': 8})
+        await asyncio.sleep(0.1)
+        same = strip._effect
+        strip.set_next_mode('Fire')
+        await asyncio.sleep(0.1)
+        task.cancel()
+        return first, same, strip._effect
+    first, same, fire = asyncio.run(go())
+    assert same is first and same.speed == 8
+    assert isinstance(fire, effects.Fire)

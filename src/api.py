@@ -6,7 +6,7 @@ import machine
 import network
 from log import Log
 from deviceconfig import (DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, CHRISTMAS_STYLES, is_valid_brightness,
-                          is_valid_transition, mqtt_topics)
+                          is_valid_speed, is_valid_transition, mqtt_topics)
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -20,7 +20,7 @@ TAG = "API"
 # once. Everything else is only read at boot and needs a restart.
 LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
                     'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse',
-                    'christmas_style', 'transition_ms')
+                    'christmas_style', 'transition_ms', 'effect_speed')
 
 
 def restart_settings(cfg):
@@ -35,7 +35,7 @@ class DeviceAPI:
     REST API and internal control interface for PlasmaStick.
     Exposes endpoints for device discovery, control, and configuration.
     """
-    
+
     def __init__(self, device_config, led_strip, pico_led):
         self.device_config = device_config
         self.led_strip = led_strip
@@ -67,7 +67,7 @@ class DeviceAPI:
         self.local_change = asyncio.Event()
         # True once app.py has set the clock from NTP (until then it says 2021).
         self.clock_set = False
-    
+
     def shift_clock(self, seconds):
         """The clock was just moved by seconds: keep the uptime right."""
         self._started += seconds
@@ -80,7 +80,7 @@ class DeviceAPI:
         safe_name = sanitize_device_name(name)
         if len(safe_name) > 32:
             return False
-        
+
         try:
             with open(DEVICE_NAME_FILE, 'w') as f:
                 ujson.dump({'name': safe_name}, f)
@@ -91,7 +91,7 @@ class DeviceAPI:
         except OSError as e:
             Log.error(TAG, f'Failed to save device name: {e}')
             return False
-    
+
     @staticmethod
     def _now():
         t = time.gmtime()
@@ -114,6 +114,7 @@ class DeviceAPI:
             'mode': self.led_strip.current_mode,
             'colour': self.led_strip.current_colour,
             'style': self.led_strip.style(),
+            'speed': self.led_strip.speed(),
             'brightness': self.led_strip.brightness,
             'modes': MODES,
             'led_count': self.device_config.device_led_count,
@@ -129,21 +130,21 @@ class DeviceAPI:
             'mem_free': gc.mem_free(),
             'mem_alloc': gc.mem_alloc(),
         }
-    
+
     def power_on(self):
         """Turn device on."""
         self.led_strip.set_next_state(True)
         self.local_change.set()
         Log.info(TAG, 'Power ON')
         return True
-    
+
     def power_off(self):
         """Turn device off."""
         self.led_strip.set_next_state(False)
         self.local_change.set()
         Log.info(TAG, 'Power OFF')
         return True
-    
+
     def toggle_power(self):
         """Toggle power state."""
         # Toggle from requested state (next_state) so rapid repeated toggles
@@ -153,7 +154,7 @@ class DeviceAPI:
         self.local_change.set()
         Log.info(TAG, 'Power toggled to: {}'.format('ON' if new_state else 'OFF'))
         return new_state
-    
+
     def set_mode(self, mode, parameters=None):
         """Set LED mode. Returns False for an unknown mode or unusable parameters."""
         if mode in MODES:
@@ -202,6 +203,7 @@ class DeviceAPI:
                 'watchdog': dc.watchdog,
                 'ntp_server': dc.ntp_server,
                 'transition_ms': dc.transition_ms,
+                'effect_speed': dc.effect_speed,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -294,6 +296,10 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'effect_speed' in dev:
+                if not is_valid_speed(dev['effect_speed']):
+                    return False, 'effect_speed must be a whole number, 1-10'
+                cfg['device']['effect_speed'] = dev['effect_speed']
             if 'transition_ms' in dev:
                 if not is_valid_transition(dev['transition_ms']):
                     return False, 'transition_ms must be a whole number, 0-10000'

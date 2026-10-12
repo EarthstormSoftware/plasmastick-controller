@@ -153,6 +153,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       <button type="button" data-style="Fade" aria-pressed="false">Fade</button>
     </div>
   </div>
+  <!-- Animations only -->
+  <div class="bright" id="speed_row" hidden>
+    <label for="speed" class="note" style="margin:0">Speed</label>
+    <input type="range" id="speed" min="1" max="10" value="5">
+    <output id="speed_text" for="speed">5</output>
+  </div>
   <div class="crow" id="colour_row">
     <input type="color" id="colour" value="#ffb46b">
     <label for="colour" id="colour_text">Colour</label>
@@ -218,6 +224,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         </div>
       </div>
       <p class="note" id="style_help">Also used whenever Christmas is chosen without a style, as from Home Assistant.</p>
+      <div class="frow">
+        <div class="field"><label for="effect_speed">Animation Speed (1-10)</label>
+          <input type="number" required name="device.effect_speed" id="effect_speed" min="1" max="10" aria-describedby="speed_help">
+        </div>
+      </div>
+      <p class="note" id="speed_help">For animations started without a speed of their own, as from Home Assistant. 5 is the usual pace.</p>
       <div class="frow">
         <div class="field"><label for="transition_ms">Fade Time (ms)</label>
           <input type="number" required name="device.transition_ms" id="transition_ms" min="0" max="10000" step="100" aria-describedby="fade_help">
@@ -417,6 +429,12 @@ function shown(i, key) {
 function showMode(mode) {
   modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === mode ? 'true' : 'false'); });
   el('style_row').hidden = mode !== 'Christmas';
+  el('speed_row').hidden = mode === 'Colour' || mode === 'CheerLights';
+  var speed = info && shown(info, 'speed');
+  if (speed && document.activeElement !== el('speed')) {
+    el('speed').value = speed;
+    el('speed_text').textContent = speed;
+  }
   var style = info && shown(info, 'style');
   styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
   el('colour').disabled = mode !== 'Colour';
@@ -431,7 +449,7 @@ styleButtons.forEach(function (b) {
     expect('mode', 'Christmas');
     expect('style', b.dataset.style);
     showMode('Christmas');
-    act('/api/mode', { mode: 'Christmas', parameters: { Style: b.dataset.style } });
+    act('/api/mode', { mode: 'Christmas', parameters: { Style: b.dataset.style, Speed: Number(el('speed').value) } });
   });
 });
 var restarting = false;  // after a save that restarts the device
@@ -611,6 +629,17 @@ el('brightness').addEventListener('input', function () {
   if (!brightnessSending) sendBrightness();
 });
 
+// Speed: the number follows the slider; the change is sent when it's let go.
+el('speed').addEventListener('input', function () { el('speed_text').textContent = el('speed').value; });
+el('speed').addEventListener('change', function () {
+  var mode = info && shown(info, 'mode'), v = Number(el('speed').value);
+  if (!mode) return;
+  var parameters = { Speed: v };
+  if (mode === 'Christmas' && info.style) parameters.Style = shown(info, 'style');
+  expect('speed', v);
+  act('/api/mode', { mode: mode, parameters: parameters });
+});
+
 el('colour').addEventListener('input', function () {
   say('');
   pendingColour = el('colour').value;
@@ -626,7 +655,8 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // and the Save button says so before it's pressed.
 var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
   'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
-  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'web.password', 'web.clear_password'];
+  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'device.effect_speed', 'web.password',
+  'web.clear_password'];
 var settingsForms = document.querySelectorAll('form.settings');
 
 function fields(f) {
