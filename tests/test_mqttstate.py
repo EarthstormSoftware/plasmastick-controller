@@ -378,3 +378,14 @@ def test_a_colour_temperature_becomes_its_white(tmp_path, monkeypatch):
 
 def test_the_sensor_descriptions_match_the_sensor_topics():
     assert tuple(s[0] for s in mqttha.SENSORS) == mqttstate.SENSOR_KEYS
+
+
+def test_groups_carry_the_colour_temperature():
+    warm = report(colour='#ffa757', kelvin=2700)
+    plain = report(colour='#ffa757')  # the same colour, but not known as a temperature
+    assert mqttgroup.group_actions(roundtrip(warm), warm, True) == []
+    assert mqttgroup.group_actions(roundtrip(warm), plain, True) == [
+        ('mode', 'Colour', {'Colour': '#ffa757', 'Kelvin': 2700})]
+    # Kelvin only means something in Colour mode.
+    rainbow = report(mode='Rainbows', colour=None, speed=5, kelvin=None)
+    assert 'Kelvin' not in json.loads(mqttgroup.group_payload(rainbow, 'P'))['ModeParameters']
