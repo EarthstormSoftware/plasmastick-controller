@@ -3,6 +3,8 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PlasmaStick</title>
+<!-- A bottle glowing warm white; the script below recolours it to match the lights. -->
+<link rel="icon" id="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M13 2h6v6l3 4v16a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12l3-4z' fill='%23ffb46b' stroke='%23333' stroke-width='1.5'/%3E%3C/svg%3E">
 <style>
 /* Colours: text is at least 4.5:1 on its background, borders and the switch track 3:1. */
 :root{color-scheme:light dark;
@@ -501,6 +503,33 @@ function chip(text, cls) {
   return c;
 }
 
+// The tab's icon glows in the lights' colour: the colour itself, or the
+// animation's colours as a gradient, or grey when they're off. Redrawn only
+// when that changes, so the tab doesn't flicker on every refresh.
+var ICON_GRADIENTS = {
+  Rainbows: ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'],
+  Fire: ['#ffd23c', '#ff8000', '#c81000'],
+  Ocean: ['#9ff0ff', '#00a0a0', '#0030a0'],
+  Christmas: ['#ff0800', '#00be14', '#ff820a', '#0a28ff']
+};
+var iconKey = null;
+function showIcon(i, on, mode) {
+  var stops = !on ? ['#8c92a0'] : ICON_GRADIENTS[mode] || [i.colour || '#ffb46b'];
+  var key = stops.join();
+  if (key === iconKey) return;
+  iconKey = key;
+  var fill = stops[0], defs = '';
+  if (stops.length > 1) {
+    defs = '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' + stops.map(function (c, n) {
+      return '<stop offset="' + n / (stops.length - 1) + '" stop-color="' + c + '"/>';
+    }).join('') + '</linearGradient></defs>';
+    fill = 'url(#g)';
+  }
+  el('icon').href = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+    defs + '<path d="M13 2h6v6l3 4v16a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V12l3-4z" fill="' + fill +
+    '" stroke="#333" stroke-width="1.5"/></svg>');
+}
+
 function render(i) {
   info = i;
   if (!modeButtons.length) buildModes(i.modes);
@@ -526,6 +555,7 @@ function render(i) {
     el('colour').value = i.colour.toLowerCase();
   }
   showMode(shown(i, 'mode'));
+  showIcon(i, on, shown(i, 'mode'));
 
   var health = el('health'), problems = [];
   health.textContent = '';
