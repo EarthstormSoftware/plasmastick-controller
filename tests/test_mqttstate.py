@@ -166,11 +166,12 @@ def test_strip_reports_what_it_shows_and_signals_changes(tmp_path, monkeypatch):
 
     on_pink, rainbows, christmas, fade = asyncio.run(go())
     assert on_pink == {'state': True, 'mode': 'Colour', 'colour': '#ffc0cb', 'style': None, 'speed': None,
-                       'brightness': 66}
-    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'style': None, 'speed': 5, 'brightness': 66}
+                       'kelvin': None, 'brightness': 66}
+    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'style': None, 'speed': 5, 'kelvin': None,
+                        'brightness': 66}
     # No style or speed asked for: the defaults.
     assert christmas == {'state': True, 'mode': 'Christmas', 'colour': None, 'style': 'Twinkle', 'speed': 5,
-                         'brightness': 66}
+                         'kelvin': None, 'brightness': 66}
     assert fade['style'] == 'Fade'
     assert json.loads(mqttstate.state_payload(fade))['ModeParameters'] == {'Style': 'Fade', 'Speed': 5}
 
@@ -271,7 +272,8 @@ def test_group_names(group, ok):
 
 
 def report(**kw):
-    r = {'state': True, 'mode': 'Colour', 'colour': '#ffb46b', 'style': None, 'speed': None, 'brightness': 66}
+    r = {'state': True, 'mode': 'Colour', 'colour': '#ffb46b', 'style': None, 'speed': None, 'kelvin': None,
+         'brightness': 66}
     r.update(kw)
     return r
 
@@ -327,3 +329,46 @@ def test_groups_carry_the_speed():
     assert mqttstate.group_actions(roundtrip(rep), rep, True) == []
     assert mqttstate.group_actions(roundtrip(rep), dict(rep, speed=5), True) == [
         ('mode', 'Christmas', {'Style': 'Fade', 'Speed': 8})]
+
+
+def test_colour_temperature_from_home_assistant():
+    assert mqttstate.parse_ha_command({'state': 'ON', 'color_temp': 370}, MODES) == [
+        ('mode', 'Colour', {'Kelvin': 2703}), ('power', True)]
+    assert mqttstate.parse_ha_command({'color_temp': 600}, MODES) == [('mode', 'Colour', {'Kelvin': 2000})]  # clamped
+    with pytest.raises(ValueError):
+        mqttstate.parse_ha_command({'color_temp': 'warm'}, MODES)
+    config = json.loads(mqttstate.ha_discovery_payload('P', mqttstate.topics('P'), MODES))
+    assert config['supported_color_modes'] == ['rgb', 'color_temp']
+    assert (config['min_mireds'], config['max_mireds']) == (153, 500)
+
+
+def test_colour_temperature_is_reported_as_such():
+    warm = report(colour='#ffa757', kelvin=2700)
+    ha = json.loads(mqttstate.ha_state_payload(warm))
+    assert ha['color_mode'] == 'color_temp' and ha['color_temp'] == 370
+    assert json.loads(mqttstate.ha_state_payload(report()))['color_mode'] == 'rgb'
+    assert json.loads(mqttstate.state_payload(warm))['ModeParameters'] == {'Colour': '#ffa757', 'Kelvin': 2700}
+
+
+def test_a_colour_temperature_becomes_its_white(tmp_path, monkeypatch):
+    from ledstrip import kelvin_colour, mode_parameters_error
+    assert kelvin_colour(3000) == '#ffb16e' and kelvin_colour(6500) == '#fffefa'
+    assert mode_parameters_error('Colour', {'Kelvin': 1500}) == 'Kelvin must be a whole number, 2000-6500'
+    monkeypatch.chdir(tmp_path)
+    strip = LedStrip(DeviceConfig.loadConfigFromFile())
+    strip.device_config.transition_ms = 0
+
+    async def go():
+        strip.set_next_state(True)
+        strip.set_next_mode('Colour', {'Kelvin': 2700})
+        task = asyncio.create_task(strip.controller())
+        await asyncio.sleep(0.15)
+        warm = strip.report()
+        strip.set_next_mode('Colour', {'Colour': '#ff0000'})
+        await asyncio.sleep(0.15)
+        task.cancel()
+        return warm, strip.report()
+
+    warm, red = asyncio.run(go())
+    assert warm['colour'] == '#ffa757' and warm['kelvin'] == 2700
+    assert red['kelvin'] is None  # a plain colour isn't a temperature

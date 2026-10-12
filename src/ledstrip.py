@@ -34,6 +34,25 @@ def light_output(percent):
     return (MIN_VISIBLE + (255 - MIN_VISIBLE) * (percent - 1) / 99) / 255
 
 
+MIN_KELVIN, MAX_KELVIN = 2000, 6500
+
+
+def is_valid_kelvin(value):
+    return isinstance(value, int) and not isinstance(value, bool) and MIN_KELVIN <= value <= MAX_KELVIN
+
+
+def kelvin_colour(kelvin):
+    """The '#rrggbb' of white light at kelvin (the usual fit to the black-body curve)."""
+    from math import log
+    t = kelvin / 100
+    if t <= 66:
+        r, g = 255, 99.4708025861 * log(t) - 161.1195681661
+    else:
+        r, g = 329.698727446 * (t - 60) ** -0.1332047592, 288.1221695283 * (t - 60) ** -0.0755148492
+    b = 255 if t >= 66 else 0 if t <= 19 else 138.5177312231 * log(t - 10) - 305.0447927307
+    return '#{:02x}{:02x}{:02x}'.format(*(min(255, max(0, int(v + 0.5))) for v in (r, g, b)))
+
+
 def mode_parameters_error(mode, parameters):
     """Why parameters can't be used for mode, or None if they can."""
     if parameters is None:
@@ -42,6 +61,8 @@ def mode_parameters_error(mode, parameters):
         return 'Mode parameters must be an object'
     if mode == 'Colour' and 'Colour' in parameters and not is_valid_colour(parameters['Colour']):
         return 'Colour must be a #RRGGBB hex colour'
+    if mode == 'Colour' and 'Kelvin' in parameters and not is_valid_kelvin(parameters['Kelvin']):
+        return 'Kelvin must be a whole number, {}-{}'.format(MIN_KELVIN, MAX_KELVIN)
     if mode == 'Christmas' and 'Style' in parameters and parameters['Style'] not in CHRISTMAS_STYLES:
         return 'Style must be one of ' + ', '.join(CHRISTMAS_STYLES)
     if mode in EFFECT_MODES and 'Speed' in parameters and not is_valid_speed(parameters['Speed']):
@@ -140,6 +161,9 @@ class LedStrip:
         self.last_time_mode_changed = time.time()
 
     def set_next_mode(self, mode, parms=None, transition_ms=None):
+        if mode == 'Colour' and isinstance(parms, dict) and is_valid_kelvin(parms.get('Kelvin')):
+            # A colour temperature: the white it makes is the colour to show.
+            parms = {'Colour': kelvin_colour(parms['Kelvin']), 'Kelvin': parms['Kelvin']}
         self.next_mode = mode
         self.mode_parameters = parms
         self._dirty = True
@@ -218,7 +242,14 @@ class LedStrip:
     def report(self):
         """What the strip is showing: {'state', 'mode', 'colour'}."""
         return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour,
-                'style': self.style(), 'speed': self.speed(), 'brightness': self.brightness}
+                'style': self.style(), 'speed': self.speed(), 'kelvin': self.kelvin(), 'brightness': self.brightness}
+
+    def kelvin(self):
+        """The colour temperature showing in Colour mode, if the colour came from one; else None."""
+        if self.current_mode != 'Colour' or not isinstance(self.mode_parameters, dict):
+            return None
+        kelvin = self.mode_parameters.get('Kelvin')
+        return kelvin if is_valid_kelvin(kelvin) and self.mode_parameters.get('Colour') == self.current_colour else None
 
     def speed(self):
         """The animation's speed (the request's, else device.effect_speed), or None in other modes."""

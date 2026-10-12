@@ -125,6 +125,8 @@ def _parameters(report, colour=True):
         parameters['Style'] = report['style']
     if report.get('speed'):
         parameters['Speed'] = report['speed']
+    if report.get('kelvin'):
+        parameters['Kelvin'] = report['kelvin']
     return parameters
 
 
@@ -192,9 +194,16 @@ def parse_group(payload, modes, mode_parameters_error):
     return {'state': state, 'mode': mode, 'parameters': parameters, 'brightness': brightness}
 
 
+# Home Assistant gives colour temperatures in mireds (a million over kelvin).
+MIN_MIREDS, MAX_MIREDS = 153, 500  # 6500 K to 2000 K
+
+
 def ha_state_payload(report):
     payload = {'state': 'ON' if report['state'] else 'OFF', 'color_mode': 'rgb', 'effect': report['mode'],
                'brightness': report['brightness']}
+    if report.get('kelvin'):
+        payload['color_mode'] = 'color_temp'
+        payload['color_temp'] = (1000000 + report['kelvin'] // 2) // report['kelvin']
     if report.get('colour'):
         payload['color'] = _rgb(report['colour'])
     return ujson.dumps(payload)
@@ -213,7 +222,9 @@ def ha_discovery_payload(client_id, t, modes, sw_version=None):
         'command_topic': t['ha_set'],
         'state_topic': t['ha_state'],
         'availability_topic': t['status'],
-        'supported_color_modes': ['rgb'],
+        'supported_color_modes': ['rgb', 'color_temp'],
+        'min_mireds': MIN_MIREDS,
+        'max_mireds': MAX_MIREDS,
         'brightness': True,
         'brightness_scale': 100,  # percent, as the device uses
         'effect': True,
@@ -258,6 +269,12 @@ def parse_ha_command(payload, modes):
         if not all(0 <= v <= 255 for v in (r, g, b)):
             raise ValueError('color values must be 0-255')
         actions.append(('mode', 'Colour', {'Colour': '#{:02x}{:02x}{:02x}'.format(r, g, b)}))
+    elif payload.get('color_temp') is not None:
+        mireds = payload['color_temp']
+        if isinstance(mireds, bool) or not isinstance(mireds, (int, float)) or not 100 <= mireds <= 1000:
+            raise ValueError('color_temp must be 100-1000 mireds')
+        kelvin = min(6500, max(2000, int(1000000 / mireds + 0.5)))
+        actions.append(('mode', 'Colour', {'Kelvin': kelvin}))
     elif effect is not None:
         if effect not in modes:
             raise ValueError('unknown effect')

@@ -115,6 +115,7 @@ class DeviceAPI:
             'colour': self.led_strip.current_colour,
             'style': self.led_strip.style(),
             'speed': self.led_strip.speed(),
+            'kelvin': self.led_strip.kelvin(),
             'brightness': self.led_strip.brightness,
             'modes': MODES,
             'led_count': self.device_config.device_led_count,

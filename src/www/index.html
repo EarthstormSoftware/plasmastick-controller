@@ -66,6 +66,8 @@ nav label:hover{color:var(--text)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .msg{font-size:12px;color:var(--bad);min-height:16px;margin-top:4px}
 .msg.good{color:var(--ok)}
+/* White: a warm-to-cool track for the colour temperature */
+.warmth{background:linear-gradient(to right,#ff890e,#ffb16e,#ffe4ce,#fffefa);border-radius:6px}
 /* Brightness slider */
 .bright{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .bright input[type=range]{flex:1;accent-color:var(--accent);height:28px}
@@ -167,6 +169,11 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
     <button type="button" class="reset" id="default_btn" title="Return to the default colour">
       <span class="swatch" id="default_swatch"></span>Default
     </button>
+  </div>
+  <div class="bright" id="white_row">
+    <label for="kelvin" class="note" style="margin:0">White</label>
+    <input type="range" id="kelvin" class="warmth" min="2000" max="6500" step="100" value="3000">
+    <output id="kelvin_text" for="kelvin">3000 K</output>
   </div>
   <p class="msg" id="msg" role="status" aria-live="polite"></p>
 </div>
@@ -439,7 +446,12 @@ function showMode(mode) {
   }
   var style = info && shown(info, 'style');
   styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
-  el('colour').disabled = mode !== 'Colour';
+  el('colour').disabled = el('kelvin').disabled = mode !== 'Colour';
+  var kelvin = info && info.kelvin;
+  if (kelvin && document.activeElement !== el('kelvin')) {
+    el('kelvin').value = kelvin;
+    el('kelvin_text').textContent = kelvin + ' K';
+  }
   el('colour_text').textContent = mode === 'Colour' ? 'Pick a colour'
     : mode === 'CheerLights' && info && info.colour ? 'CheerLights: ' + info.colour : 'Colour mode only';
   showDefault(mode);
@@ -657,6 +669,13 @@ el('brightness').addEventListener('input', function () {
   el('brightness_text').textContent = el('brightness').value + '%';
   pendingBrightness = Math.round(Number(el('brightness').value));
   if (!brightnessSending) sendBrightness();
+});
+
+// White: the colour temperature, sent when the slider is let go.
+el('kelvin').addEventListener('input', function () { el('kelvin_text').textContent = el('kelvin').value + ' K'; });
+el('kelvin').addEventListener('change', function () {
+  expect('mode', 'Colour');
+  act('/api/mode', { mode: 'Colour', parameters: { Kelvin: Number(el('kelvin').value) } });
 });
 
 // Speed: the number follows the slider; the change is sent when it's let go.

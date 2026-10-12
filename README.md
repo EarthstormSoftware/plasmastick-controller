@@ -14,6 +14,9 @@ API, MQTT, or the button on the board.
   The animations have a speed, 1-10 (`"ModeParameters": {"Speed": 7}`, or the Control tab's slider); without one,
   `device.effect_speed` (5) is used. Changing the speed, or choosing the mode that's already showing, doesn't
   restart the animation.
+- White by temperature: in Colour mode, `"ModeParameters": {"Kelvin": 2700}` (2000-6500) shows that shade of
+  white, as does the Control tab's White slider. Home Assistant discovery offers colour temperature as well as RGB,
+  so voice assistants connected through it can ask for warm or cool white.
   CheerLights polls `device.cheerlights_url` (default
   `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
   entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for
