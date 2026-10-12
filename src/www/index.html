@@ -16,7 +16,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
 body{font-family:system-ui,sans-serif;background:var(--page);color:var(--text);min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
-.card{background:var(--card);border-radius:12px;width:100%;max-width:500px;overflow:hidden}
+.card{background:var(--card);border-radius:12px;width:100%;max-width:760px;overflow:hidden}
 header{padding:20px 20px 0;text-align:center}
 h1{font-size:21px;color:var(--text);margin-bottom:6px}
 .badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:var(--chip);color:var(--text2)}
@@ -36,11 +36,15 @@ nav label:hover{color:var(--text)}
 .pane{display:none;padding:20px}
 #tc:checked~nav label[for=tc],
 #td:checked~nav label[for=td],
-#tn:checked~nav label[for=tn]{color:var(--accent);border-bottom-color:var(--accent)}
-#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn{display:block}
+#tn:checked~nav label[for=tn],
+#tm:checked~nav label[for=tm]{color:var(--accent);border-bottom-color:var(--accent)}
+#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn,#tm:checked~#pm{display:block}
 #tc:focus-visible~nav label[for=tc],
 #td:focus-visible~nav label[for=td],
-#tn:focus-visible~nav label[for=tn]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
+#tn:focus-visible~nav label[for=tn],
+#tm:focus-visible~nav label[for=tm]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
+/* The controls keep a phone-like width; the settings use the whole card */
+#pc{max-width:540px;margin:0 auto}
 /* Mode buttons */
 .modes{display:flex;gap:6px;margin-bottom:12px}
 .modes button{flex:1;padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
@@ -70,8 +74,19 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Sections */
 .sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
 .sec:first-child{margin-top:0}
-/* Generic inputs */
-.frow{display:flex;gap:8px;margin-bottom:8px}
+/* Settings sections flow into two columns when there's room, one on a phone */
+.cols{columns:2 300px;column-gap:32px}
+.group{break-inside:avoid;padding-bottom:4px}
+/* Generic inputs: fields sit side by side when they fit, stacked when not */
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-bottom:10px;cursor:pointer}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
+details{margin:4px 0 8px}
+summary{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;padding:4px 0;margin-bottom:6px}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* With MQTT off there's nothing else to set (browsers without :has() show it all) */
+form:has(#mqtt_enabled:not(:checked)) .mqtt-more{display:none}
+form:has(#mqtt_enabled:checked) .mqtt-off{display:none}
 .field{flex:1;display:flex;flex-direction:column;gap:3px}
 .field label{font-size:12px;color:var(--text2);font-weight:500}
 input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
@@ -104,10 +119,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 <input type="radio" name="t" id="tc" aria-label="Control tab" checked>
 <input type="radio" name="t" id="td" aria-label="Device tab">
 <input type="radio" name="t" id="tn" aria-label="Network tab">
+<input type="radio" name="t" id="tm" aria-label="MQTT tab">
 <nav>
   <label for="tc">Control</label>
   <label for="td">Device</label>
   <label for="tn">Network</label>
+  <label for="tm">MQTT</label>
 </nav>
 
 <!-- CONTROL PANEL -->
@@ -149,73 +166,76 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 <div class="pane" id="pd">
   <form class="settings" action="/ctrl/config" method="post">
     <input type="hidden" name="tab" value="device">
-    <div class="sec">Identity</div>
-    <div class="frow">
-      <div class="field"><label for="device_name">Device Name</label>
-        <input type="text" name="device_name" id="device_name" maxlength="32">
+    <div class="cols">
+    <div class="group">
+      <div class="sec">Identity</div>
+      <div class="frow">
+        <div class="field"><label for="device_name">Device Name</label>
+          <input type="text" name="device_name" id="device_name" maxlength="32">
+        </div>
       </div>
-    </div>
-    <div class="sec">LED Hardware</div>
-    <div class="frow">
-      <div class="field"><label for="device_led_count">LED Count</label>
-        <input type="number" required name="device_led_count" id="device_led_count" min="1" max="300">
-      </div>
-      <div class="field"><label for="device_led_rgbw">Type</label>
-        <select name="device_led_rgbw" id="device_led_rgbw">
-          <option value="false">RGB</option>
-          <option value="true">RGBW</option>
-        </select>
-      </div>
-    </div>
-    <div class="sec">Defaults</div>
-    <div class="frow">
-      <div class="field"><label for="default_state">Default State</label>
-        <select name="default_state" id="default_state">
-          <option value="false">OFF</option>
-          <option value="true">ON</option>
-        </select>
-      </div>
-      <div class="field"><label for="default_mode">Default Mode</label>
-        <select name="default_mode" id="default_mode">
-          <option value="Colour">Colour</option>
-          <option value="Rainbows">Rainbows</option>
-          <option value="CheerLights">CheerLights</option>
-        </select>
-      </div>
-    </div>
-    <div class="frow">
-      <div class="field"><label for="default_brightness">Default Brightness (%)</label>
-        <input type="number" required name="default_brightness" id="default_brightness" min="1" max="100">
-      </div>
-    </div>
-    <div class="frow">
-      <div class="field"><label for="default_colour">Default Colour</label>
-        <div class="crow">
-          <input type="color" name="default_colour" id="default_colour" value="#ffb46b">
-          <span class="note" style="margin:0" id="default_colour_text"></span>
+      <div class="sec">LED Hardware</div>
+      <div class="frow">
+        <div class="field"><label for="device_led_count">LED Count</label>
+          <input type="number" required name="device_led_count" id="device_led_count" min="1" max="300">
+        </div>
+        <div class="field"><label for="device_led_rgbw">Type</label>
+          <select name="device_led_rgbw" id="device_led_rgbw">
+            <option value="false">RGB</option>
+            <option value="true">RGBW</option>
+          </select>
         </div>
       </div>
     </div>
-    <div class="sec">CheerLights</div>
-    <div class="frow">
-      <div class="field"><label for="cheerlights_url">API URL</label>
-        <input type="url" name="cheerlights_url" id="cheerlights_url">
+    <div class="group">
+      <div class="sec">At Power-up</div>
+      <label class="check"><input type="checkbox" name="default_state" id="default_state" value="true"> Turn the lights on</label>
+      <div class="frow">
+        <div class="field"><label for="default_mode">Mode</label>
+          <select name="default_mode" id="default_mode">
+            <option value="Colour">Colour</option>
+            <option value="Rainbows">Rainbows</option>
+            <option value="CheerLights">CheerLights</option>
+          </select>
+        </div>
+        <div class="field"><label for="default_brightness">Brightness (%)</label>
+          <input type="number" required name="default_brightness" id="default_brightness" min="1" max="100">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="default_colour">Colour</label>
+          <div class="crow">
+            <input type="color" name="default_colour" id="default_colour" value="#ffb46b">
+            <span class="note" style="margin:0" id="default_colour_text"></span>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="frow">
-      <div class="field"><label for="cheerlights_update_interval">Update Interval (s)</label>
-        <input type="number" required name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
+    <div class="group">
+      <div class="sec">CheerLights</div>
+      <div class="frow">
+        <div class="field"><label for="cheerlights_url">API URL</label>
+          <input type="url" name="cheerlights_url" id="cheerlights_url">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="cheerlights_update_interval">Update Interval (s)</label>
+          <input type="number" required name="cheerlights_update_interval" id="cheerlights_update_interval" min="10">
+        </div>
       </div>
     </div>
-    <div class="sec">Diagnostics</div>
-    <div class="frow">
-      <div class="field"><label for="log_level">Log Level (USB serial log)</label>
-        <select name="log_level" id="log_level">
-          <option value="0">Warnings and errors</option>
-          <option value="1">Info</option>
-          <option value="2">Debug</option>
-        </select>
+    <div class="group">
+      <div class="sec">Diagnostics</div>
+      <div class="frow">
+        <div class="field"><label for="log_level">Log Level (USB serial log)</label>
+          <select name="log_level" id="log_level">
+            <option value="0">Warnings and errors</option>
+            <option value="1">Info</option>
+            <option value="2">Debug</option>
+          </select>
+        </div>
       </div>
+    </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
@@ -239,80 +259,86 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 <div class="pane" id="pn">
   <form class="settings" action="/ctrl/config" method="post">
     <input type="hidden" name="tab" value="network">
-    <div class="sec">WiFi</div>
-    <div class="frow">
-      <div class="field"><label for="ssid">Network (SSID)</label>
-        <input type="text" id="ssid" aria-describedby="wifi_help" disabled>
+    <div class="cols">
+    <div class="group">
+      <div class="sec">Wi-Fi</div>
+      <div class="frow">
+        <div class="field"><label for="ssid">Network (SSID)</label>
+          <input type="text" id="ssid" aria-describedby="wifi_help" disabled>
+        </div>
       </div>
+      <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its PlasmaStick-SETUP hotspot. Join it, then open http://192.168.4.1.</p>
+      <details>
+        <summary>Connection timing</summary>
+        <div class="frow">
+          <div class="field"><label for="connect_timeout">Connect Timeout (s)</label>
+            <input type="number" required name="connect_timeout" id="connect_timeout" min="5">
+          </div>
+          <div class="field"><label for="reconnect_wait">Reconnect Wait (s)</label>
+            <input type="number" required name="reconnect_wait" id="reconnect_wait" min="5">
+          </div>
+        </div>
+        <div class="frow">
+          <div class="field"><label for="max_retries">Max Retries (0 = unlimited)</label>
+            <input type="number" required name="max_retries" id="max_retries" min="0">
+          </div>
+        </div>
+      </details>
     </div>
-    <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its PlasmaStick-SETUP hotspot. Join it, then open http://192.168.4.1.</p>
-    <div class="frow">
-      <div class="field"><label for="connect_timeout">Connect Timeout (s)</label>
-        <input type="number" required name="connect_timeout" id="connect_timeout" min="5">
+    <div class="group">
+      <div class="sec">Web Access</div>
+      <div class="frow">
+        <div class="field"><label for="web_password">Password (<span id="web_password_state">none set</span>)</label>
+          <input type="password" name="web_password" id="web_password" aria-describedby="web_password_help" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
+        </div>
       </div>
-      <div class="field"><label for="reconnect_wait">Reconnect Wait (s)</label>
-        <input type="number" required name="reconnect_wait" id="reconnect_wait" min="5">
-      </div>
+      <label class="check"><input type="checkbox" name="web_password_clear" id="web_password_clear" value="true"> Remove the password</label>
+      <p class="note" id="web_password_help">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
     </div>
-    <div class="frow">
-      <div class="field"><label for="max_retries">Max Retries (0=unlimited)</label>
-        <input type="number" required name="max_retries" id="max_retries" min="0">
-      </div>
     </div>
-    <div class="sec">MQTT</div>
-    <div class="frow">
-      <div class="field"><label for="mqtt_enabled">Enabled</label>
-        <select name="mqtt_enabled" id="mqtt_enabled">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
+    <button type="submit" class="btn-full save" disabled>Save</button>
+    <p class="msg" role="status" aria-live="polite"></p>
+  </form>
+</div>
+
+<!-- MQTT PANEL -->
+<div class="pane" id="pm">
+  <form class="settings" action="/ctrl/config" method="post">
+    <input type="hidden" name="tab" value="mqtt">
+    <label class="check"><input type="checkbox" name="mqtt_enabled" id="mqtt_enabled" value="true"> Connect to an MQTT broker</label>
+    <p class="note mqtt-off">MQTT lets home automation software such as Home Assistant or Node-RED control the lights.</p>
+    <div class="cols mqtt-more">
+    <div class="group">
+      <div class="sec">Broker</div>
+      <div class="frow">
+        <div class="field"><label for="broker_address">Address</label>
+          <input type="text" name="broker_address" id="broker_address">
+        </div>
       </div>
+      <div class="frow">
+        <div class="field"><label for="mqtt_user">Username</label>
+          <input type="text" name="mqtt_user" id="mqtt_user">
+        </div>
+        <div class="field"><label for="mqtt_password">Password</label>
+          <input type="password" name="mqtt_password" id="mqtt_password" placeholder="leave blank to keep">
+        </div>
+      </div>
+      <details>
+        <summary>Session options</summary>
+        <div class="frow">
+          <div class="field"><label for="queue_len">Queue Length</label>
+            <input type="number" required name="queue_len" id="queue_len" min="1">
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" name="clean" id="clean" value="true"> Clean session</label>
+      </details>
     </div>
-    <div class="frow">
-      <div class="field"><label for="broker_address">Broker Address</label>
-        <input type="text" name="broker_address" id="broker_address">
-      </div>
+    <div class="group">
+      <div class="sec">Home Assistant</div>
+      <label class="check"><input type="checkbox" name="ha_discovery" id="ha_discovery" value="true"> Announce the light to Home Assistant</label>
+      <p class="note">Home Assistant adds the light automatically (MQTT discovery). Turning this off removes it again.</p>
     </div>
-    <div class="frow">
-      <div class="field"><label for="mqtt_user">Username</label>
-        <input type="text" name="mqtt_user" id="mqtt_user">
-      </div>
-      <div class="field"><label for="mqtt_password">Password</label>
-        <input type="password" name="mqtt_password" id="mqtt_password" placeholder="leave blank to keep">
-      </div>
     </div>
-    <div class="frow">
-      <div class="field"><label for="queue_len">Queue Length</label>
-        <input type="number" required name="queue_len" id="queue_len" min="1">
-      </div>
-      <div class="field"><label for="clean">Clean Session</label>
-        <select name="clean" id="clean">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-    </div>
-    <div class="frow">
-      <div class="field"><label for="ha_discovery">Home Assistant Discovery</label>
-        <select name="ha_discovery" id="ha_discovery">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-      </div>
-    </div>
-    <div class="sec">Web Access</div>
-    <div class="frow">
-      <div class="field"><label for="web_password">Password (<span id="web_password_state">none set</span>)</label>
-        <input type="password" name="web_password" id="web_password" aria-describedby="web_password_help" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
-      </div>
-      <div class="field"><label for="web_password_clear">Remove Password</label>
-        <select name="web_password_clear" id="web_password_clear">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-      </div>
-    </div>
-    <p class="note" id="web_password_help">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
   </form>
@@ -538,12 +564,14 @@ var settingsForms = document.querySelectorAll('form.settings');
 function fields(f) {
   return Array.prototype.filter.call(f.elements, function (e) { return e.name && e.type !== 'submit'; });
 }
+// A tick box's value never changes, so compare whether it's ticked.
+function val(e) { return e.type === 'checkbox' ? String(e.checked) : e.value; }
 function remember(f) {
-  fields(f).forEach(function (e) { e.dataset.saved = e.value; });
+  fields(f).forEach(function (e) { e.dataset.saved = val(e); });
   showSave(f);
 }
 function needsRestart(f) {
-  return fields(f).some(function (e) { return LIVE.indexOf(e.name) < 0 && e.value !== e.dataset.saved; });
+  return fields(f).some(function (e) { return LIVE.indexOf(e.name) < 0 && val(e) !== e.dataset.saved; });
 }
 function showSave(f) {
   f.querySelector('.save').textContent = needsRestart(f) ? 'Save & Restart' : 'Save';
@@ -597,10 +625,10 @@ settingsForms.forEach(function (f) {
           if (info) render(info);
         }
         if (f.elements.web_password) {
-          if (f.elements.web_password_clear.value === 'true') el('web_password_state').textContent = 'none set';
+          if (f.elements.web_password_clear.checked) el('web_password_state').textContent = 'none set';
           else if (f.elements.web_password.value) el('web_password_state').textContent = 'set';
           f.elements.web_password.value = '';
-          f.elements.web_password_clear.value = 'false';
+          f.elements.web_password_clear.checked = false;
         }
         remember(f);
         btn.disabled = false;
@@ -610,7 +638,12 @@ settingsForms.forEach(function (f) {
         msg.textContent = 'Not saved: ' + err.message;
         // Errors start with the setting's name: point at that field.
         var bad = f.elements[(/^\w+/.exec(err.message) || [''])[0]];
-        if (bad && bad.focus) { bad.setAttribute('aria-invalid', 'true'); bad.focus(); }
+        if (bad && bad.focus) {
+          var d = bad.closest('details');
+          if (d) d.open = true;
+          bad.setAttribute('aria-invalid', 'true');
+          bad.focus();
+        }
         btn.disabled = false;
       });
   });
@@ -653,7 +686,7 @@ fetch('/api/config')
     el('device_name').value = dev.device_name;
     el('device_led_count').value = dev.device_led_count;
     sel('device_led_rgbw', !!dev.device_led_rgbw);
-    sel('default_state', !!dev.default_state);
+    el('default_state').checked = !!dev.default_state;
     el('default_brightness').value = dev.default_brightness;
     sel('default_mode', dev.default_mode);
     sel('log_level', dev.log_level);
@@ -663,12 +696,12 @@ fetch('/api/config')
     el('connect_timeout').value = wl.connect_timeout;
     el('reconnect_wait').value = wl.reconnect_wait;
     el('max_retries').value = wl.max_retries;
-    sel('mqtt_enabled', !!mq.enabled);
+    el('mqtt_enabled').checked = !!mq.enabled;
     el('broker_address').value = mq.broker_address;
     el('mqtt_user').value = mq.user;
     el('queue_len').value = mq.queue_len;
-    sel('clean', !!mq.clean);
-    sel('ha_discovery', !!mq.ha_discovery);
+    el('clean').checked = !!mq.clean;
+    el('ha_discovery').checked = !!mq.ha_discovery;
     el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';
     settingsForms.forEach(function (f) { remember(f); f.querySelector('.save').disabled = false; });
   })

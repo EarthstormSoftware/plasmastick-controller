@@ -110,7 +110,7 @@ to its default (including the MQTT settings, web password and a name set in the 
 
 ## MQTT
 
-With MQTT enabled (Network tab, or `mqtt` in `config.json`), the device uses these topics, where `<name>` is its device
+With MQTT enabled (MQTT tab, or `mqtt` in `config.json`), the device uses these topics, where `<name>` is its device
 name:
 
 | Topic | Direction | Contents |

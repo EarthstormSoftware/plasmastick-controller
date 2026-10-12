@@ -250,7 +250,7 @@ class HTTPServer:
                         'device_led_rgbw': form.get('device_led_rgbw', 'false') == 'true',
                         'default_mode': form.get('default_mode', 'Colour'),
                         'mode_parameters': {'Colour': form.get('default_colour', DEFAULT_COLOUR)},
-                        'default_state': form.get('default_state', 'false') == 'true',
+                        'default_state': form.get('default_state') == 'true',
                         'default_brightness': int(form.get('default_brightness', 100)),
                         'cheerlights_url': form.get('cheerlights_url', ''),
                         'cheerlights_update_interval': int(form.get('cheerlights_update_interval', 60)),
@@ -259,27 +259,31 @@ class HTTPServer:
                     name = (form.get('device_name') or '').strip()
                     if name and name != api.device_name and not api.set_device_name(name):
                         error = 'Device name must be 1-32 characters'
-                else:
+                elif tab == 'network':
                     updates['wlan'] = {
                         'connect_timeout': int(form.get('connect_timeout', 30)),
                         'reconnect_wait': int(form.get('reconnect_wait', 30)),
                         'max_retries': int(form.get('max_retries', 0)),
                     }
-                    updates['mqtt'] = {
-                        'enabled': form.get('mqtt_enabled', 'false') == 'true',
-                        'broker_address': form.get('broker_address', ''),
-                        'user': form.get('mqtt_user', ''),
-                        'queue_len': int(form.get('queue_len', 4)),
-                        'clean': form.get('clean', 'true') == 'true',
-                        'ha_discovery': form.get('ha_discovery', 'false') == 'true',
-                    }
-                    pw = form.get('mqtt_password', '')
-                    if pw:
-                        updates['mqtt']['password'] = pw
                     if form.get('web_password_clear') == 'true':
                         updates['web'] = {'clear_password': True}
                     elif form.get('web_password'):
                         updates['web'] = {'password': form.get('web_password')}
+                elif tab == 'mqtt':
+                    # Unticked boxes aren't sent, so a missing one means off.
+                    updates['mqtt'] = {
+                        'enabled': form.get('mqtt_enabled') == 'true',
+                        'broker_address': form.get('broker_address', ''),
+                        'user': form.get('mqtt_user', ''),
+                        'queue_len': int(form.get('queue_len', 4)),
+                        'clean': form.get('clean') == 'true',
+                        'ha_discovery': form.get('ha_discovery') == 'true',
+                    }
+                    pw = form.get('mqtt_password', '')
+                    if pw:
+                        updates['mqtt']['password'] = pw
+                else:
+                    error = 'Unknown settings tab'
                 if not error:
                     success, error = api.save_config(updates)
                 if error:
