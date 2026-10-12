@@ -180,6 +180,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
     <button type="button" class="reset" id="default_btn" title="Return to the default colour">
       <span class="swatch" id="default_swatch"></span>Default
     </button>
+    <button type="button" class="reset" id="set_default_btn" title="Make the colour showing now the default">Set as default</button>
   </div>
   <div class="bright" id="white_row">
     <label for="kelvin" class="note" style="margin:0">White</label>
@@ -501,9 +502,10 @@ function showMode(mode) {
   styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
   el('colour').disabled = el('kelvin').disabled = mode !== 'Colour';
   var kelvin = info && info.kelvin;
-  if (kelvin && document.activeElement !== el('kelvin')) {
-    el('kelvin').value = kelvin;
-    el('kelvin_text').textContent = kelvin + ' K';
+  if (document.activeElement !== el('kelvin')) {
+    if (kelvin) el('kelvin').value = kelvin;
+    // A colour picked any other way isn't a white temperature: no figure for it.
+    el('kelvin_text').textContent = kelvin ? kelvin + ' K' : '\u2014';
   }
   el('colour_text').textContent = mode === 'Colour' ? 'Pick a colour'
     : mode === 'CheerLights' && info && info.colour ? 'CheerLights: ' + info.colour : 'Colour mode only';
@@ -649,7 +651,7 @@ function showDefault(mode) {
   if (!defaultColour) return;
   el('default_swatch').style.backgroundColor = defaultColour;
   var current = info && info.colour;
-  el('default_btn').disabled = mode !== 'Colour' ||
+  el('default_btn').disabled = el('set_default_btn').disabled = mode !== 'Colour' ||
     (!!current && !colourSending && current.toLowerCase() === defaultColour.toLowerCase());
 }
 
@@ -702,6 +704,29 @@ el('default_btn').addEventListener('click', function () {
   el('default_btn').disabled = true;
   expect('mode', 'Colour');
   act('/api/mode', { mode: 'Colour' });  // no colour: the device uses its configured default
+});
+
+// The colour showing becomes the default (with its temperature, if it's a white).
+el('set_default_btn').addEventListener('click', function () {
+  var c = info && info.colour;
+  if (!c) return;
+  var parameters = { Colour: c };
+  if (info.kelvin) parameters.Kelvin = info.kelvin;
+  el('set_default_btn').disabled = true;
+  say('');
+  post('/api/config', { device: { mode_parameters: parameters } })
+    .then(function () {
+      defaultColour = c;
+      // The Device tab's copy too, so saving that tab later keeps the new default.
+      var field = el('default_colour');
+      field.value = field.dataset.saved = c.toLowerCase();
+      el('default_colour_text').textContent = c;
+      el('msg').className = 'msg good';
+      say('Saved as the default colour.');
+      setTimeout(function () { el('msg').className = 'msg'; say(''); }, 3000);
+    })
+    .catch(function (e) { el('msg').className = 'msg'; say('Not saved: ' + e.message); })
+    .then(function () { showDefault(info ? shown(info, 'mode') : null); });
 });
 
 // Apply brightness while dragging, at most one request at a time.
