@@ -52,6 +52,7 @@ class DeviceAPI:
         # requests don't each pay for the hash. Cleared when the password changes.
         self.accepted_auth = None
         self._started = time.time()
+        self.version = VERSION
         # Set by main.py: the MQTT client (None when MQTT is off) and the last
         # connection error, so the web UI can show why MQTT isn't connected.
         self.mqtt_client = None

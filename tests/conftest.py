@@ -38,6 +38,11 @@ time.ticks_ms = lambda: int(time.monotonic() * 1000)
 time.ticks_diff = lambda a, b: a - b
 time.sleep_ms = lambda ms: time.sleep(ms / 1000)
 
+# MicroPython's extra os functions.
+os.ilistdir = lambda path: ((e.name, 0x4000 if e.is_dir() else 0x8000, 0) for e in os.scandir(path))
+if not hasattr(os, 'statvfs'):
+    os.statvfs = lambda path: (4096, 4096, 512, 256, 256, 0, 0, 0, 0, 255)  # 1 MB free
+
 # MicroPython's heap figures.
 gc.mem_free = lambda: 120000
 gc.mem_alloc = lambda: 76000
@@ -69,8 +74,10 @@ class _WDT:
 
 
 class _Timer:
-    def __init__(self, period=None, callback=None):
-        self.period, self.callback, self.running = period, callback, True
+    ONE_SHOT, PERIODIC = 0, 1
+
+    def __init__(self, period=None, callback=None, mode=1):
+        self.period, self.callback, self.mode, self.running = period, callback, mode, True
 
     def deinit(self):
         self.running = False

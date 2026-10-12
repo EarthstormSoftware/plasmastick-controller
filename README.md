@@ -70,7 +70,7 @@ Connect the Plasma Stick over USB and run:
 .\scripts\deploy.ps1
 ```
 
-The script compiles everything except `main.py` to bytecode (`.mpy`, which saves the device compiling it in RAM),
+The script compiles everything except the small `main.py` to bytecode (`.mpy`, which saves the device compiling it in RAM),
 copies it to the device (libraries into `/lib`), checks that everything arrived, and soft-resets the board. Keep
 `mpy-cross`'s version in line with the device firmware, or the device can't load the `.mpy` files.
 
@@ -81,6 +81,23 @@ copies it to the device (libraries into `/lib`), checks that everything arrived,
 | `-PreserveProvisioning:$false` | Wipe the stored Wi-Fi credentials and device name, so the device starts setup mode again |
 | `-Wipe` | Delete everything on the device first, then deploy with `config.example.json` (or a local `config.json`). It boots into setup mode |
 | `-SkipReset` | Don't reset the board after copying |
+| `-WiFi <host>` | Update over Wi-Fi instead of USB (see below) |
+
+### Updating over Wi-Fi
+
+Once a device runs this firmware, later versions can go over Wi-Fi:
+
+```powershell
+$env:PLASMASTICK_WEB_PASSWORD = '...'   # or leave it unset to be asked
+.\scripts\deploy.ps1 -WiFi porch.local
+```
+
+It compiles as usual, sends only the files that changed (and removes ones the new version dropped), and the device
+restarts to apply them. The device must have a web password set; updates are refused without one. The new firmware
+is on trial until its web server is up: if it doesn't get that far within 3 minutes, twice, the device puts the
+previous files back by itself and reports the rollback in its log and at `GET /api/update`. `main.py` and
+`otaboot.py`, which apply updates and roll them back, are only ever updated over USB, as are settings and
+credentials, which an update never touches. A USB deploy also clears any half-finished Wi-Fi update.
 
 ## Tests
 
@@ -147,11 +164,11 @@ Assistant.
 
 | Path | Contents |
 |---|---|
-| `src/` | Device code, deployed to the root of the device. `main.py` is the entry point |
+| `src/` | Device code, deployed to the root of the device. `main.py` starts it: `otaboot.py` deals with any Wi-Fi update, then `app.py` runs the firmware |
 | `src/www/` | The web UI, deployed to `/www`: a static page that fills itself in from the JSON API |
 | `src/lib/` | Third-party libraries, deployed to `/lib`: `microdot` (web server), `mqtt_as` (MQTT client) |
 | `tests/` | Host-side pytest tests (`py -m pytest`); `conftest.py` stands in for the MicroPython-only modules |
-| `scripts/` | `deploy.ps1`; `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
+| `scripts/` | `deploy.ps1`; `wifi_update.py` (`deploy.ps1 -WiFi`); `device_log.py` (capture and summarise the serial log); `smoke_test.py` (test a running device over HTTP and MQTT) |
 | `docs/` | Maintenance notes |
 
 ## Known Restrictions

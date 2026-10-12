@@ -3,7 +3,10 @@ param(
     [switch]$ResetConfig,
     [switch]$Wipe,
     [switch]$SkipReset,
-    [string]$Port
+    [string]$Port,
+    # Update over Wi-Fi instead of USB: the device's hostname or IP address.
+    # Needs a web password on the device (PLASMASTICK_WEB_PASSWORD, or asked for).
+    [string]$WiFi
 )
 
 Set-StrictMode -Version Latest
@@ -214,6 +217,21 @@ $libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy'; $mqttAsMpy = ':/lib/
 $totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
 Write-Host "Compiled ($totalKb KB to copy)"
 
+if ($WiFi) {
+    # Hand the same files to the Wi-Fi updater (main.py and otaboot excepted: USB only).
+    $fileMap = [ordered]@{}
+    foreach ($table in @($runtimeFiles, $libFilesToDeploy)) {
+        foreach ($localPath in $table.Keys) {
+            $devicePath = $table[$localPath].TrimStart(':').TrimStart('/')
+            if ($devicePath -notin @('main.py', 'otaboot.mpy')) { $fileMap[$devicePath] = $localPath }
+        }
+    }
+    $mapFile = Join-Path $buildDir 'files.json'
+    $fileMap | ConvertTo-Json | Set-Content -Path $mapFile -Encoding utf8
+    & py (Join-Path $scriptDir 'wifi_update.py') --host $WiFi --files $mapFile
+    exit $LASTEXITCODE
+}
+
 # config.json holds settings saved from the web UI, so it is only pushed when the
 # device has none, or when -ResetConfig is given. A local config.json (gitignored)
 # is used if present, otherwise config.example.json.
@@ -226,7 +244,8 @@ $requiredRemoteFiles = @($runtimeFiles.Values) + @($libFilesToDeploy.Values) + @
 
 # Remove both forms of every module first: a stale .py next to a fresh .mpy
 # would be imported instead of it, because MicroPython looks for .py first.
-$remoteFilesToRemove = @(':/main.py')
+# boot.py: never run by this firmware; one left from testing would only confuse.
+$remoteFilesToRemove = @(':/main.py', ':/boot.py', ':/update_state.json')
 foreach ($name in $moduleNames) {
     $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
 }
@@ -256,7 +275,9 @@ if (-not $PreserveProvisioning) {
     $remoteFilesToRemove += @(':/provisioning.json', ':/device_name.json')
 }
 
-$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www')
+# /update and /prev hold a Wi-Fi update's staged files and backups: a USB deploy
+# replaces everything, so a stale rollback must not undo it.
+$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www', ':/update', ':/prev')
 
 Write-Host 'Resolving mpremote command...'
 $MpremoteCommand = Resolve-MpremoteCommand

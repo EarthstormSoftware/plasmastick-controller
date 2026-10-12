@@ -1,6 +1,6 @@
 import uasyncio as asyncio
 import ubinascii
-from microdot import Microdot, Response
+from microdot import Microdot, Request, Response
 from log import Log
 from passwords import check_password
 
@@ -10,6 +10,11 @@ TAG = "HTTP"
 # /api/config. It is streamed from flash in small chunks, so serving it
 # never needs one large block of heap.
 INDEX_FILE = '/www/index.html'
+
+# Bodies up to max_body_length are read into memory; bigger ones (firmware files
+# sent over Wi-Fi) are streamed. An update's manifest is a few KB.
+Request.max_body_length = 8192
+Request.max_content_length = 64 * 1024
 
 
 def origin_allowed(headers):
@@ -197,6 +202,61 @@ class HTTPServer:
                 return {'success': False, 'error': 'Reset failed: ' + str(e)}, 500
             asyncio.create_task(http_server._restart_soon())
             return {'success': True, 'setup_mode': wifi}
+
+        # Firmware updates over Wi-Fi (see ota.py). Only with a web password set:
+        # replacing the firmware is more than changing a setting.
+        updater = []  # the Updater, made on first use
+
+        def _update_refused():
+            if not api.web_password_hash:
+                return {'success': False, 'error': 'Set a web password before updating over Wi-Fi'}, 403
+            if not updater:
+                import ota
+                updater.append(ota.Updater())
+            return None
+
+        @app.get('/api/update')
+        async def api_update_status(request):
+            refused = _update_refused()
+            if refused:
+                return refused
+            import ota
+            return {'version': api.version, 'mpy': ota.mpy_version(), 'free': ota.free_bytes(),
+                    'state': ota.state(), 'files': ota.installed_files()}
+
+        @app.post('/api/update/begin')
+        async def api_update_begin(request):
+            refused = _update_refused()
+            if refused:
+                return refused
+            error = updater[0].begin(request.json)
+            if error:
+                return {'success': False, 'error': error}, 400
+            Log.info(TAG, f'Receiving update {request.json["version"]}')
+            return {'success': True}
+
+        @app.put('/api/update/file/<path:path>')
+        async def api_update_file(request, path):
+            refused = _update_refused()
+            if refused:
+                return refused
+            error = await updater[0].receive(path, request.stream, request.content_length)
+            if error:
+                Log.warn(TAG, f'Update file refused: {error}')
+                return {'success': False, 'error': error}, 400
+            return {'success': True}
+
+        @app.post('/api/update/commit')
+        async def api_update_commit(request):
+            refused = _update_refused()
+            if refused:
+                return refused
+            error = updater[0].commit()
+            if error:
+                return {'success': False, 'error': error}, 400
+            Log.info(TAG, 'Update ready; restarting to apply it')
+            asyncio.create_task(http_server._restart_soon())
+            return {'success': True}
 
         @app.get('/favicon.ico')
         async def favicon(request):

@@ -8,9 +8,10 @@
 
 ## Architecture
 - Layout: device code is in `src/` (deployed to the device root), vendored libraries are in `src/lib/` (deployed to `/lib`), host-side tooling is in `scripts/`, host-side tests in `tests/`.
-- Entry point is `main.py`, which wires core controllers and starts asynchronous tasks.
+- Entry point is `main.py`, a stub: it runs `otaboot` (applies or rolls back a Wi-Fi update) then imports `app.py`, which wires core controllers and starts asynchronous tasks. `main.py` and `otaboot.py` are USB-only (an update over Wi-Fi refuses them) and must stay self-contained; this firmware never runs `boot.py`.
+- Wi-Fi updates: `ota.py` (device side, behind the web password) and `scripts/wifi_update.py` (`deploy.ps1 -WiFi <host>`).
 - Connectivity ownership: `wlan.py` manages WLAN lifecycle and connection state transitions.
-- MQTT ownership: `main.py` wraps `mqtt_as.MQTTClient` and only connects/reconnects when WLAN is healthy.
+- MQTT ownership: `app.py` wraps `mqtt_as.MQTTClient` and only connects/reconnects when WLAN is healthy.
 - Device control boundaries:
   - `ledstrip.py`: strip state/mode behavior.
   - `effects.py`: the animated modes, one class per mode, imported only when one runs. Frames use whole numbers and
@@ -22,7 +23,7 @@
 
 ## Build And Test
 - There is no local build system. `tests/` has host-side pytest tests for pure logic (`py -m pytest`; `tests/conftest.py` stubs `machine`, `network`, `plasma` and the u-modules). Add tests there for new parsing/validation logic. Hardware and network behaviour is still verified by smoke testing on device.
-- Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles everything except `main.py`, including `src/lib/`, to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed.
+- Deploy with `scripts/deploy.ps1` (uses `mpremote`; compiles everything except `main.py`, including `src/lib/`, to `.mpy`). It keeps the device's `config.json` unless `-ResetConfig` is passed. `-WiFi <host>` updates over Wi-Fi instead (needs the device's web password).
 - For mqtt_as upgrades and rollback/testing commands, follow `docs/mqtt_as_maintenance.md`.
 - Minimum validation after behavior changes:
   - Device boots and main tasks start.

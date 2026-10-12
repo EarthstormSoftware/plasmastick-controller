@@ -52,7 +52,7 @@ def find_pico_port():
 
 
 def soft_reset(ser):
-    # Ctrl-C stops main.py and drops to the REPL, Ctrl-D then soft-resets,
+    # Ctrl-C stops the firmware and drops to the REPL, Ctrl-D then soft-resets,
     # which runs main.py again from the start.
     ser.write(b'\x03\x03')
     time.sleep(0.3)
