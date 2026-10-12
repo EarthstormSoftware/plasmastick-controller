@@ -97,6 +97,9 @@ py scripts/device_log.py --seconds <seconds+30> --quiet --out build/soak.log
 py scripts/smoke_test.py --host <address> --skip-mqtt --soak <seconds>
 ```
 
+Use the IP address from step 3 as `<address>` here, not the `.local` name: on Windows a `.local` lookup takes
+about 3 s whenever its short cache runs out, which shows up as false `SOAK_STALL`s.
+
 The HTTP checks run first and the original state is restored before the soak starts.
 
 The soak pings the device every second alongside the polls. A failed or slow (over 2 s) poll is printed as

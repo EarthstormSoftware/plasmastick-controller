@@ -225,3 +225,48 @@ def test_a_reset_retires_the_retained_topics_in_use(api, keep_wifi):
     running = api.device_config.mqttconfig.topics()
     api.reset(keep_wifi=keep_wifi)
     assert DeviceConfig.retired_topics() == [running[k] for k in mqttstate.RETAINED]
+
+
+def test_info_lists_the_modes(api):
+    from ledstrip import MODES
+    assert list(api.get_device_info()['modes']) == list(MODES)
+
+
+def test_a_config_save_can_rename_the_device(api):
+    assert api.save_config({'device': {'device_name': ' Porch Lights ', 'default_state': True}}) == (True, None)
+    assert api.device_name == 'Porch-Lights'
+    assert api.restart_required()
+    # The name is kept in device_name.json, not config.json.
+    assert saved_config(api)['device']['device_name'] == ''
+    with open('device_name.json') as fp:
+        assert json.load(fp) == {'name': 'Porch-Lights'}
+
+
+def test_saving_the_same_name_is_not_a_rename(api):
+    assert api.save_config({'device': {'device_name': api.device_name}}) == (True, None)
+    assert not api.restart_required()
+
+
+@pytest.mark.parametrize('name', ['', '   ', 'x' * 33])
+def test_a_bad_name_rejects_the_whole_save(api, name):
+    assert api.save_config({'device': {'device_name': name, 'default_state': True}}) == (
+        False, 'device_name must be 1-32 characters')
+    assert 'default_state' not in saved_config(api)['device']
+
+
+def test_every_settings_field_on_the_page_is_a_config_setting(api):
+    import os
+    import re
+    page_file = os.path.join(os.path.dirname(__file__), '..', 'src', 'www', 'index.html')
+    page = open(page_file, encoding='utf-8').read()
+    names = re.findall(r'name="((?:device|wlan|mqtt|web)\.[\w.]+)"', page)
+    assert len(names) > 20
+    cfg = api.get_config()
+    write_only = {'web.password', 'web.clear_password', 'mqtt.password'}
+    for name in names:
+        if name in write_only:
+            continue
+        value = cfg
+        for key in name.split('.'):
+            assert isinstance(value, dict) and key in value, name
+            value = value[key]

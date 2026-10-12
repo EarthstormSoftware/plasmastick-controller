@@ -93,6 +93,7 @@ class DeviceAPI:
             'mode': self.led_strip.current_mode,
             'colour': self.led_strip.current_colour,
             'brightness': self.led_strip.brightness,
+            'modes': MODES,
             'led_count': self.device_config.device_led_count,
             'uptime_s': time.time() - self._started,
             'wifi': {'ssid': self.device_config.wlanconfig.ssid, 'ip': sta.ifconfig()[0], 'rssi': rssi},
@@ -205,6 +206,14 @@ class DeviceAPI:
             wlan = updates.get('wlan', {})
             mqtt = updates.get('mqtt', {})
 
+            # The name is kept in its own file (see set_device_name), so check it
+            # here and save it once the rest has been accepted.
+            name = dev.get('device_name')
+            if name is not None:
+                name = str(name).strip()
+                if not 0 < len(name) <= 32:
+                    return False, 'device_name must be 1-32 characters'
+
             # Device section
             if 'device_led_count' in dev:
                 v = int(dev['device_led_count'])
@@ -309,6 +318,8 @@ class DeviceAPI:
 
             DeviceConfig.saveConfigToFile(cfg)
             self._config_cache = cfg
+            if name is not None and name != self.device_name and not self.set_device_name(name):
+                return False, 'device_name could not be saved'
             new_hash = cfg.get('web', {}).get('password_hash', '')
             if new_hash != self.web_password_hash:
                 self.web_password_hash = new_hash
