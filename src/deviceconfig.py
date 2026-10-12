@@ -35,6 +35,8 @@ _DEFAULT_CONFIG = {
         "watchdog": True,
         # Where to set the clock from (NTP, UTC); empty: don't.
         "ntp_server": "pool.ntp.org",
+        # How long power, brightness and colour changes fade for; 0: instant.
+        "transition_ms": 500,
     },
     "wlan": {
         "ssid": "",
@@ -72,6 +74,11 @@ DEVICE_NAME_FILE = "device_name.json"
 LED_LAYOUTS = ("bottle", "horizontal", "vertical")
 CHRISTMAS_STYLES = ("Twinkle", "Fade")
 RETIRED_TOPICS_FILE = "retired_topics.json"
+
+
+def is_valid_transition(value):
+    """True for a whole number of milliseconds, 0-10000, for device.transition_ms."""
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 10000
 
 
 def is_valid_brightness(value):
@@ -194,6 +201,10 @@ class DeviceConfig:
             self.christmas_style = "Twinkle"
         self.watchdog = bool(configdata["device"]["watchdog"])
         self.ntp_server = str(configdata["device"]["ntp_server"] or "")
+        self.transition_ms = configdata["device"]["transition_ms"]
+        if not is_valid_transition(self.transition_ms):
+            Log.warn(TAG, f'Ignoring transition_ms {self.transition_ms!r}; it must be 0-10000')
+            self.transition_ms = _DEFAULT_CONFIG["device"]["transition_ms"]
         self.default_brightness = configdata["device"]["default_brightness"]
         if not is_valid_brightness(self.default_brightness):
             Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')

@@ -14,7 +14,8 @@
         "led_reverse": false,
         "christmas_style": "Twinkle",
         "watchdog": true,
-        "ntp_server": "pool.ntp.org"
+        "ntp_server": "pool.ntp.org",
+        "transition_ms": 500
     },
     "wlan": {
         "ssid": "",

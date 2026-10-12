@@ -199,7 +199,9 @@ def handle_ha_command(payload):
         Log.warn(TAG, f'Ignoring Home Assistant command: {e}')
         return
     for action in actions:
-        if action[0] == 'power':
+        if action[0] == 'transition':
+            led_strip.set_next_transition(action[1])  # for the changes that follow
+        elif action[0] == 'power':
             if action[1]:
                 device_api.power_on()
             else:

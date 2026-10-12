@@ -139,6 +139,11 @@ def _run():
         _trial_timer = machine.Timer(mode=machine.Timer.ONE_SHOT, period=DEADLINE_MS, callback=_deadline)
 
 
+def on_trial():
+    """True if this boot is an update's trial (its deadline timer is running)."""
+    return _trial_timer is not None
+
+
 def run():
     try:
         _run()

@@ -15,6 +15,9 @@ API, MQTT, or the button on the board.
   `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
   entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for
   `https://`.
+- Fades: turning on and off, and changing the brightness or (in Colour mode) the colour, fade over
+  `device.transition_ms` (500 ms by default; 0 for instant; Device tab). Animations fade too. Home Assistant's
+  `transition` sets the time for that one command. Switching mode is instant.
 - The animations follow the LED layout (Device tab, `device.led_layout`): `bottle` (LEDs jumbled, the default),
   `horizontal` or `vertical` strip. `device.led_reverse` flips a strip: a vertical strip's first LED (nearest the
   controller) is then the top, and a horizontal strip's patterns travel the other way.

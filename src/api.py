@@ -5,7 +5,8 @@ import ujson
 import machine
 import network
 from log import Log
-from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, CHRISTMAS_STYLES, is_valid_brightness, mqtt_topics
+from deviceconfig import (DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, CHRISTMAS_STYLES, is_valid_brightness,
+                          is_valid_transition, mqtt_topics)
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -19,7 +20,7 @@ TAG = "API"
 # once. Everything else is only read at boot and needs a restart.
 LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
                     'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse',
-                    'christmas_style')
+                    'christmas_style', 'transition_ms')
 
 
 def restart_settings(cfg):
@@ -200,6 +201,7 @@ class DeviceAPI:
                 'christmas_style': dc.christmas_style,
                 'watchdog': dc.watchdog,
                 'ntp_server': dc.ntp_server,
+                'transition_ms': dc.transition_ms,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -292,6 +294,10 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'transition_ms' in dev:
+                if not is_valid_transition(dev['transition_ms']):
+                    return False, 'transition_ms must be a whole number, 0-10000'
+                cfg['device']['transition_ms'] = dev['transition_ms']
             if 'ntp_server' in dev:
                 v = str(dev['ntp_server']).strip()
                 if len(v) > 64 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in v):

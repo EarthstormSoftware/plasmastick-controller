@@ -216,3 +216,13 @@ def test_a_rollback_is_reported_once(root):
     assert ota.take_rollback() == '9.9.9'
     assert ota.take_rollback() is None
     assert ota.state()['state'] == 'rolled_back'
+
+
+def test_on_trial_only_while_an_update_awaits_confirmation(root, monkeypatch):
+    import otaboot
+    monkeypatch.setattr(otaboot, '_trial_timer', None)
+    boot_once()
+    assert not otaboot.on_trial()
+    stage()
+    boot_once()
+    assert otaboot.on_trial()

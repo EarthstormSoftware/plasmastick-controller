@@ -233,7 +233,8 @@ def ha_sensor_discovery_payload(client_id, t, key):
 
 def parse_ha_command(payload, modes):
     """Turn a Home Assistant JSON light command into actions, in order:
-    ('mode', name, parameters or None), ('brightness', 1-100) and ('power', bool).
+    ('transition', ms) if it asks for one, ('mode', name, parameters or None),
+    ('brightness', 1-100) and ('power', bool).
     Raises ValueError for anything it can't use."""
     if not isinstance(payload, dict):
         raise ValueError('command must be a JSON object')
@@ -264,4 +265,9 @@ def parse_ha_command(payload, modes):
         actions.append(('power', state == 'ON'))
     if not actions:
         raise ValueError('nothing to do')
+    transition = payload.get('transition')
+    if transition is not None:
+        if isinstance(transition, bool) or not isinstance(transition, (int, float)) or not 0 <= transition <= 3600:
+            raise ValueError('transition must be 0-3600 seconds')
+        actions.insert(0, ('transition', int(transition * 1000 + 0.5)))
     return actions

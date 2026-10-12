@@ -6,5 +6,9 @@
 # bad update must not be able to replace them. Everything else is in app.py.
 import otaboot
 otaboot.run()
+if not otaboot.on_trial():  # its deadline timer needs it until an update confirms
+    import sys
+    del sys.modules['otaboot']
+del otaboot
 
 import app  # noqa: E402,F401  (runs the firmware)

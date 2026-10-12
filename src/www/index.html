@@ -219,6 +219,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       </div>
       <p class="note" id="style_help">Also used whenever Christmas is chosen without a style, as from Home Assistant.</p>
       <div class="frow">
+        <div class="field"><label for="transition_ms">Fade Time (ms)</label>
+          <input type="number" required name="device.transition_ms" id="transition_ms" min="0" max="10000" step="100" aria-describedby="fade_help">
+        </div>
+      </div>
+      <p class="note" id="fade_help">Turning on and off, and changing brightness or colour, fade over this time. 0: instant. Home Assistant can ask for its own.</p>
+      <div class="frow">
         <div class="field"><label for="default_colour">Colour</label>
           <div class="crow">
             <input type="color" name="device.mode_parameters.Colour" id="default_colour" value="#ffb46b">
@@ -620,7 +626,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // and the Save button says so before it's pressed.
 var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
   'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
-  'device.led_reverse', 'device.christmas_style', 'web.password', 'web.clear_password'];
+  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'web.password', 'web.clear_password'];
 var settingsForms = document.querySelectorAll('form.settings');
 
 function fields(f) {

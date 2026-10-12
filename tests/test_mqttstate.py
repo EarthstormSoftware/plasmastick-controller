@@ -176,6 +176,7 @@ def test_strip_reports_what_it_shows_and_signals_changes(tmp_path, monkeypatch):
 def test_brightness_scales_what_is_painted_and_signals_a_change(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     strip = LedStrip(DeviceConfig.loadConfigFromFile())
+    strip.device_config.transition_ms = 0  # no fades: see test_fades.py
 
     async def go():
         strip.set_brightness(100)

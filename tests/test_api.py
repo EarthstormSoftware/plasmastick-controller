@@ -346,3 +346,11 @@ def test_uptime_survives_the_clock_being_set(api):
                                         ('bad host', False), ('x' * 65, False), ('a/b', False)])
 def test_ntp_server_is_checked(api, server, ok):
     assert api.save_config({'device': {'ntp_server': server}})[0] == ok
+
+
+def test_fade_time_is_checked_and_applies_live(api):
+    assert api.get_config()['device']['transition_ms'] == 500
+    assert api.save_config({'device': {'transition_ms': 1500}}) == (True, None)
+    assert api.device_config.transition_ms == 1500 and not api.restart_required()
+    assert api.save_config({'device': {'transition_ms': 10001}}) == (False, 'transition_ms must be a whole number, 0-10000')
+    assert api.save_config({'device': {'transition_ms': 0.5}})[0] is False
