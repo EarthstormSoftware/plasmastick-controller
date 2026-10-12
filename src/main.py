@@ -191,6 +191,10 @@ async def up(client):
         # With discovery off, an empty retained config removes any earlier one.
         discovery = mqttstate.ha_discovery_payload(device_config.mqttconfig.client_id, t, MODES, VERSION) if ha else ''
         await client.publish(t['ha_config'], discovery, retain=True)
+        for key, _, _ in mqttstate.SENSORS:
+            discovery = mqttstate.ha_sensor_discovery_payload(device_config.mqttconfig.client_id, t, key) if ha else ''
+            await client.publish(t['ha_sensor_' + key], discovery, retain=True)
+        await send_info(client, t)
         led_strip.changed.set()  # publish the current state now that we're connected
 
 async def clear_retired_topics(client, t):
@@ -204,6 +208,24 @@ async def clear_retired_topics(client, t):
     if retired:
         Log.info(TAG, f'Cleared {len(retired)} old retained topic(s)')
     DeviceConfig.clear_retired_topics()
+
+async def send_info(client, t):
+    import mqttstate
+    await client.publish(t['info'], mqttstate.info_payload(device_api.get_device_info()), retain=True)
+
+async def publish_info(client):
+    # Health figures (uptime, Wi-Fi signal, free memory) now and then; up()
+    # sends them straight away on each connection.
+    import mqttstate
+    t = mqtt_topics()
+    while True:
+        await asyncio.sleep(mqttstate.INFO_INTERVAL_S)
+        if not client.isconnected():
+            continue
+        try:
+            await send_info(client, t)
+        except OSError as e:
+            Log.warn(TAG, f'Failed to publish info: {e}')
 
 async def publish_state(client):
     # Publishes the strip's state (retained) whenever it changes. Changes while
@@ -300,7 +322,7 @@ async def main(client):
             await client.connect()
             Log.info(TAG,'Creating MQTT tasks')
             device_api.mqtt_error = None
-            for coroutine in (up, down, messages, publish_state):
+            for coroutine in (up, down, messages, publish_state, publish_info):
                 asyncio.create_task(coroutine(client))
             break
         except OSError as e:

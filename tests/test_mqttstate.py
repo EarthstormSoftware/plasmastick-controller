@@ -15,6 +15,8 @@ def test_topics():
     assert t['status'] == '/home/device/PorchLights/status'
     assert t['ha_set'] == '/home/device/PorchLights/ha/set'
     assert t['ha_config'] == 'homeassistant/light/PorchLights/config'
+    assert t['info'] == '/home/device/PorchLights/info'
+    assert t['ha_sensor_rssi'] == 'homeassistant/sensor/PorchLights/rssi/config'
 
 
 def test_default_config_keeps_the_existing_topics(tmp_path, monkeypatch):
@@ -70,8 +72,9 @@ def test_retired_topics_are_the_retained_ones_no_longer_used():
     old = mqttstate.topics('Porch')
     assert mqttstate.retired_topics(old, old) == []
     moved = mqttstate.retired_topics(old, mqttstate.topics('Porch', 'lights/{name}'))
-    # The discovery config stays where it was, so it isn't cleared.
-    assert moved == ['/home/device/Porch/state', '/home/device/Porch/status', '/home/device/Porch/ha/state']
+    # The discovery configs stay where they were, so they aren't cleared.
+    assert moved == ['/home/device/Porch/state', '/home/device/Porch/status', '/home/device/Porch/info',
+                     '/home/device/Porch/ha/state']
     renamed = mqttstate.retired_topics(old, mqttstate.topics('Garden'))
     assert 'homeassistant/light/Porch/config' in renamed and '/home/device/Porch/control' not in renamed
 
@@ -215,3 +218,31 @@ def test_cheerlights_only_uses_a_valid_colour(tmp_path, monkeypatch, payload, sh
     monkeypatch.setattr(asynchttp, 'get_json', fake_get_json)
     asyncio.run(strip._fetch_cheerlights())
     assert strip.current_colour == shown
+
+
+def test_info_payload_has_the_health_figures():
+    info = {'version': '1.1.0', 'uptime_s': 125, 'mem_free': 86000, 'state': True,
+            'wifi': {'ssid': 'Home', 'ip': '192.168.1.20', 'rssi': -61}}
+    assert json.loads(mqttstate.info_payload(info)) == {
+        'version': '1.1.0', 'uptime_s': 125, 'rssi': -61, 'ip': '192.168.1.20', 'mem_free': 86000}
+
+
+@pytest.mark.parametrize('key', [s[0] for s in mqttstate.SENSORS])
+def test_sensor_discovery_reads_the_info_topic(key):
+    t = mqttstate.topics('PorchLights')
+    config = json.loads(mqttstate.ha_sensor_discovery_payload('PorchLights', t, key))
+    assert config['state_topic'] == t['info'] and config['availability_topic'] == t['status']
+    assert config['value_template'] == '{{ value_json.' + key + ' }}'
+    assert config['unique_id'] == 'PorchLights_' + key
+    assert config['entity_category'] == 'diagnostic'
+    # The same device as the light, so Home Assistant shows them together.
+    light = json.loads(mqttstate.ha_discovery_payload('PorchLights', t, MODES))
+    assert config['device']['identifiers'] == light['device']['identifiers']
+    # Every sensor reads a figure the info payload has.
+    info = {'version': 'x', 'uptime_s': 1, 'mem_free': 1, 'wifi': {'ip': 'x', 'rssi': -1}}
+    assert key in json.loads(mqttstate.info_payload(info))
+
+
+def test_unknown_sensor():
+    with pytest.raises(ValueError):
+        mqttstate.ha_sensor_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), 'nope')

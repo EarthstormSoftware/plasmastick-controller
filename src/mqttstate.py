@@ -9,9 +9,11 @@ device name) and Home Assistant discovery prefix (mqtt.ha_prefix):
   <base>/control      commands (StateChange / ModeChange / BrightnessChange)
   <base>/state        retained: {"State", "Mode", "ModeParameters", "Brightness"}
   <base>/status       retained: "online", or "offline" (the will)
+  <base>/info         retained: {"version", "uptime_s", "rssi", "ip", "mem_free"}, every minute
   <base>/ha/state     retained: state in Home Assistant's JSON light schema
   <base>/ha/set       Home Assistant JSON light commands
   <ha_prefix>/light/<name>/config   retained discovery config (if enabled)
+  <ha_prefix>/sensor/<name>/<key>/config   the same for the info sensors
 """
 import ujson
 
@@ -22,8 +24,21 @@ DEFAULT_TOPIC_BASE = '/home/device/{name}'
 DEFAULT_HA_PREFIX = 'homeassistant'
 MAX_TOPIC_PREFIX_LEN = 100
 
+INFO_INTERVAL_S = 60
+
+# Home Assistant diagnostic sensors, read from the info topic: (key, name, extra config).
+SENSORS = (
+    ('rssi', 'Wi-Fi signal', {'device_class': 'signal_strength', 'unit_of_measurement': 'dBm',
+                              'state_class': 'measurement'}),
+    ('uptime_s', 'Uptime', {'device_class': 'duration', 'unit_of_measurement': 's',
+                            'state_class': 'total_increasing'}),
+    ('mem_free', 'Free memory', {'device_class': 'data_size', 'unit_of_measurement': 'B',
+                                 'state_class': 'measurement'}),
+    ('ip', 'IP address', {}),
+)
+
 # The topics the device publishes retained, so ones it stops using need clearing.
-RETAINED = ('state', 'status', 'ha_state', 'ha_config')
+RETAINED = ('state', 'status', 'info', 'ha_state', 'ha_config') + tuple('ha_sensor_' + s[0] for s in SENSORS)
 
 
 def _prefix_error(value, setting, placeholder):
@@ -59,14 +74,18 @@ def ha_prefix_error(prefix):
 
 def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX):
     base = base.replace('{name}', client_id)
-    return {
+    t = {
         'control': base + '/control',
         'state': base + '/state',
         'status': base + '/status',
+        'info': base + '/info',
         'ha_state': base + '/ha/state',
         'ha_set': base + '/ha/set',
         'ha_config': ha_prefix + '/light/' + client_id + '/config',
     }
+    for key, _, _ in SENSORS:
+        t['ha_sensor_' + key] = ha_prefix + '/sensor/' + client_id + '/' + key + '/config'
+    return t
 
 
 def retired_topics(old, new):
@@ -85,6 +104,12 @@ def state_payload(report):
     parameters = {'Colour': report['colour']} if report.get('colour') else {}
     return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': parameters,
                         'Brightness': report['brightness']})
+
+
+def info_payload(info):
+    """info: DeviceAPI.get_device_info(). The health figures, as /api/info has them."""
+    return ujson.dumps({'version': info['version'], 'uptime_s': info['uptime_s'], 'rssi': info['wifi']['rssi'],
+                        'ip': info['wifi']['ip'], 'mem_free': info['mem_free']})
 
 
 def ha_state_payload(report):
@@ -115,6 +140,24 @@ def ha_discovery_payload(client_id, t, modes, sw_version=None):
         'effect_list': list(modes),
         'device': device,
     })
+
+
+def ha_sensor_discovery_payload(client_id, t, key):
+    """Discovery config for one of SENSORS, on the same device as the light."""
+    for k, name, extra in SENSORS:
+        if k == key:
+            config = {
+                'name': name,
+                'unique_id': client_id + '_' + key,
+                'state_topic': t['info'],
+                'value_template': '{{ value_json.' + key + ' }}',
+                'availability_topic': t['status'],
+                'entity_category': 'diagnostic',
+                'device': {'identifiers': [client_id]},
+            }
+            config.update(extra)
+            return ujson.dumps(config)
+    raise ValueError('unknown sensor')
 
 
 def parse_ha_command(payload, modes):

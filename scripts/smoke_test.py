@@ -187,9 +187,10 @@ def test_mqtt(dev, config, args):
     ha_prefix = mqtt.get('ha_prefix', 'homeassistant')
     topic = base + '/control'
     ha = bool(mqtt.get('ha_discovery'))
-    watched = {'status': base + '/status', 'state': base + '/state'}
+    watched = {'status': base + '/status', 'state': base + '/state', 'info': base + '/info'}
     if ha:
-        watched.update({'ha_state': base + '/ha/state', 'ha_config': f'{ha_prefix}/light/{device_name}/config'})
+        watched.update({'ha_state': base + '/ha/state', 'ha_config': f'{ha_prefix}/light/{device_name}/config',
+                        'ha_sensor': f'{ha_prefix}/sensor/{device_name}/rssi/config'})
     seen = {}  # topic -> latest payload text
 
     client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id=f'smoke-test-{os.getpid()}')
@@ -231,10 +232,17 @@ def test_mqtt(dev, config, args):
             time.sleep(0.1)
         status = seen.get(watched['status'])
         check('mqtt.status_online', status == 'online', f'status={status}')
+        expected_info = dev.info()
+        ok, info = wait_json('info', lambda p: p.get('version') == expected_info.get('version')
+                             and isinstance(p.get('uptime_s'), int) and p.get('ip') == expected_info['wifi']['ip'])
+        check('mqtt.info', ok and isinstance(info.get('mem_free'), int), f'info={info}')
         if ha:
             ok, discovery = wait_json('ha_config', lambda c: c.get('unique_id') == f'{device_name}_light')
             check('mqtt.ha_discovery', ok and discovery.get('brightness') is True and discovery.get('brightness_scale') == 100,
                   f'brightness={discovery and discovery.get("brightness")}, scale={discovery and discovery.get("brightness_scale")}')
+            ok, sensor = wait_json('ha_sensor', lambda c: c.get('unique_id') == f'{device_name}_rssi')
+            check('mqtt.ha_sensor_discovery', ok and sensor.get('state_topic') == watched['info'],
+                  f'state_topic={sensor and sensor.get("state_topic")}')
         else:
             report('SKIP', 'mqtt.ha_discovery', 'Home Assistant discovery is off on the device')
 

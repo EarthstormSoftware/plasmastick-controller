@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+import mqttstate
 from api import DeviceAPI
 from deviceconfig import DeviceConfig
 from ledstrip import LedStrip
@@ -210,7 +211,7 @@ def test_changing_topics_retires_the_old_retained_ones(api):
     api.save_config({'mqtt': {'user': 'me'}})
     assert DeviceConfig.retired_topics() == []
     api.save_config({'mqtt': {'topic_base': 'lights/{name}'}})
-    assert DeviceConfig.retired_topics() == [running['state'], running['status'], running['ha_state']]
+    assert DeviceConfig.retired_topics() == [running['state'], running['status'], running['info'], running['ha_state']]
 
 
 def test_a_rename_retires_the_old_retained_topics(api):
@@ -223,4 +224,4 @@ def test_a_rename_retires_the_old_retained_topics(api):
 def test_a_reset_retires_the_retained_topics_in_use(api, keep_wifi):
     running = api.device_config.mqttconfig.topics()
     api.reset(keep_wifi=keep_wifi)
-    assert DeviceConfig.retired_topics() == [running['state'], running['status'], running['ha_state'], running['ha_config']]
+    assert DeviceConfig.retired_topics() == [running[k] for k in mqttstate.RETAINED]
