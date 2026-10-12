@@ -326,3 +326,23 @@ def test_every_local_change_is_signalled_for_the_group(api):
     api.local_change.clear()
     assert not api.set_mode('Disco') and not api.set_brightness(0)
     assert not api.local_change.is_set()  # refused changes aren't changes
+
+
+def test_the_time_is_only_reported_once_the_clock_is_set(api):
+    assert api.get_device_info()['time'] is None
+    api.clock_set = True
+    t = api.get_device_info()['time']
+    assert len(t) == 20 and t[4] == '-' and t[10] == 'T' and t.endswith('Z')
+
+
+def test_uptime_survives_the_clock_being_set(api):
+    before = api.get_device_info()['uptime_s']
+    api._started -= 5 * 365 * 86400  # as if the clock had just jumped five years forward...
+    api.shift_clock(5 * 365 * 86400)  # ...and app.py passed the jump on
+    assert api.get_device_info()['uptime_s'] - before < 2
+
+
+@pytest.mark.parametrize('server, ok', [('pool.ntp.org', True), ('192.168.1.1', True), ('', True),
+                                        ('bad host', False), ('x' * 65, False), ('a/b', False)])
+def test_ntp_server_is_checked(api, server, ok):
+    assert api.save_config({'device': {'ntp_server': server}})[0] == ok

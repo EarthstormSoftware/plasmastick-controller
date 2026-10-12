@@ -13,7 +13,8 @@
         "led_layout": "bottle",
         "led_reverse": false,
         "christmas_style": "Twinkle",
-        "watchdog": true
+        "watchdog": true,
+        "ntp_server": "pool.ntp.org"
     },
     "wlan": {
         "ssid": "",

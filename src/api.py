@@ -64,7 +64,13 @@ class DeviceAPI:
         # Set by every change made here (web UI, API, button, MQTT control, Home
         # Assistant), so app.py can pass it on to the device's group.
         self.local_change = asyncio.Event()
+        # True once app.py has set the clock from NTP (until then it says 2021).
+        self.clock_set = False
     
+    def shift_clock(self, seconds):
+        """The clock was just moved by seconds: keep the uptime right."""
+        self._started += seconds
+
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
         if not name or len(name) == 0 or len(name) > 32:
@@ -85,6 +91,11 @@ class DeviceAPI:
             Log.error(TAG, f'Failed to save device name: {e}')
             return False
     
+    @staticmethod
+    def _now():
+        t = time.gmtime()
+        return '{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z'.format(*t[:6])
+
     def get_device_info(self):
         """Return device info and health as dict."""
         gc.collect()  # so mem_free is live data, not live data plus garbage
@@ -106,6 +117,7 @@ class DeviceAPI:
             'modes': MODES,
             'led_count': self.device_config.device_led_count,
             'uptime_s': time.time() - self._started,
+            'time': self._now() if self.clock_set else None,
             'wifi': {'ssid': self.device_config.wlanconfig.ssid, 'ip': sta.ifconfig()[0], 'rssi': rssi},
             'mqtt': {
                 'enabled': client is not None,
@@ -187,6 +199,7 @@ class DeviceAPI:
                 'led_reverse': dc.led_reverse,
                 'christmas_style': dc.christmas_style,
                 'watchdog': dc.watchdog,
+                'ntp_server': dc.ntp_server,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -279,6 +292,11 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'ntp_server' in dev:
+                v = str(dev['ntp_server']).strip()
+                if len(v) > 64 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in v):
+                    return False, 'ntp_server must be a host name or address (blank: off)'
+                cfg['device']['ntp_server'] = v
             if 'watchdog' in dev:
                 cfg['device']['watchdog'] = bool(dev['watchdog'])
             if 'christmas_style' in dev:

@@ -315,6 +315,36 @@ async def down(client):
 
 HEAP_LOG_INTERVAL_S = 300
 
+CLOCK_SYNC_S = 6 * 3600  # the board's clock drifts a few seconds a day
+
+async def clock_sync():
+    # Sets the clock (UTC) from device.ntp_server once Wi-Fi is up, then now and then.
+    server = device_config.ntp_server
+    if not server:
+        return
+    import ntp
+    wait = 0
+    while True:
+        await asyncio.sleep(wait)
+        if not wlan.is_connected():
+            wait = 30
+            continue
+        try:
+            moved = ntp.set_clock(await ntp.fetch(server))
+        except (OSError, ValueError) as e:
+            Log.warn(TAG, f'Could not set the clock from {server}: {e}')
+            wait = 600 if device_api.clock_set else 60
+            continue
+        # Things timed by the clock move with it, so uptime and intervals stay right.
+        device_api.shift_clock(moved)
+        Log.set_start_time(Log.start_time + moved)
+        if led_strip.cheerlights_last_update:
+            led_strip.cheerlights_last_update += moved
+        if not device_api.clock_set:
+            Log.info(TAG, f'Clock set from {server} (UTC)')
+        device_api.clock_set = True
+        wait = CLOCK_SYNC_S
+
 async def heap_monitor():
     # Logs free heap now and then, so long runs show leaks or fragmentation growth.
     # Collects first, so the figures are live data rather than live data plus garbage.
@@ -393,6 +423,7 @@ async def main(client):
     if not server.done():  # it's still serving
         confirm_update()
     asyncio.create_task(heap_monitor())
+    asyncio.create_task(clock_sync())
     asyncio.create_task(loop_monitor())
     if device_config.watchdog:
         dog = watchdog.Watchdog()

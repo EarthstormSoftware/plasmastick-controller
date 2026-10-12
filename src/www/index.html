@@ -252,6 +252,12 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         </div>
       </div>
       <label class="check"><input type="checkbox" name="device.watchdog" id="watchdog"> Restart automatically if the firmware stops responding</label>
+      <div class="frow">
+        <div class="field"><label for="ntp_server">Time Server (NTP)</label>
+          <input type="text" name="device.ntp_server" id="ntp_server" maxlength="64" placeholder="none: don't set the clock" aria-describedby="ntp_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="ntp_help">Sets the clock, for log times. Times are UTC.</p>
     </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
@@ -477,7 +483,8 @@ function render(i) {
   document.title = i.name;
   el('name').textContent = i.name;
   el('footer_name').textContent = i.name;
-  el('footer_info').textContent = '\u2022 v' + i.version + ' \u2022 up ' + duration(i.uptime_s) +
+  el('footer_info').textContent = '\u2022 v' + i.version + (i.time ? ' \u2022 ' + i.time.slice(11, 16) + ' UTC' : '') +
+    ' \u2022 up ' + duration(i.uptime_s) +
     ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
   var on = shown(i, 'state');
   var st = el('state');

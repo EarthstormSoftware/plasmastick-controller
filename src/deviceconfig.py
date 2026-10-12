@@ -33,6 +33,8 @@ _DEFAULT_CONFIG = {
         "christmas_style": "Twinkle",
         # Restart the board if the firmware stops responding (see watchdog.py).
         "watchdog": True,
+        # Where to set the clock from (NTP, UTC); empty: don't.
+        "ntp_server": "pool.ntp.org",
     },
     "wlan": {
         "ssid": "",
@@ -191,6 +193,7 @@ class DeviceConfig:
             Log.warn(TAG, f'Ignoring christmas_style {self.christmas_style!r}; it must be one of {", ".join(CHRISTMAS_STYLES)}')
             self.christmas_style = "Twinkle"
         self.watchdog = bool(configdata["device"]["watchdog"])
+        self.ntp_server = str(configdata["device"]["ntp_server"] or "")
         self.default_brightness = configdata["device"]["default_brightness"]
         if not is_valid_brightness(self.default_brightness):
             Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')
