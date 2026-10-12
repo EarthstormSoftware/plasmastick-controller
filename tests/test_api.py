@@ -217,3 +217,10 @@ def test_a_rename_retires_the_old_retained_topics(api):
     running = api.device_config.mqttconfig.topics()
     assert api.set_device_name('kitchen')
     assert running['ha_config'] in DeviceConfig.retired_topics()
+
+
+@pytest.mark.parametrize('keep_wifi', [True, False])
+def test_a_reset_retires_the_retained_topics_in_use(api, keep_wifi):
+    running = api.device_config.mqttconfig.topics()
+    api.reset(keep_wifi=keep_wifi)
+    assert DeviceConfig.retired_topics() == [running['state'], running['status'], running['ha_state'], running['ha_config']]

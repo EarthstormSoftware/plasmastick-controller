@@ -127,7 +127,7 @@ brightness and the modes as effects. Home Assistant controls it through `<base>/
 on the next connection.
 
 Changing the topic base, the discovery prefix or the device name restarts the device. On its next connection it
-clears the retained messages it left on the old topics, so nothing stale is left on the broker or in Home
+clears the retained messages it left on the old topics (after a reset, once MQTT is set up again), so nothing stale is left on the broker or in Home
 Assistant.
 
 ## Project layout

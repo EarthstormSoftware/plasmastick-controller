@@ -351,6 +351,14 @@ class DeviceAPI:
 
     def reset(self, keep_wifi):
         """Reset settings to defaults (see DeviceConfig.reset). Restart afterwards."""
+        # The name and topics after the reset aren't known until the next boot, so
+        # note every retained topic in use: any still in use then aren't cleared.
+        import mqttstate
+        t = self.device_config.mqttconfig.topics()
+        try:
+            DeviceConfig.retire_topics([t[k] for k in mqttstate.RETAINED])
+        except OSError as e:
+            Log.warn(TAG, f'Could not note the old MQTT topics: {e}')
         DeviceConfig.reset(keep_wifi)
 
     def restart(self):
