@@ -136,6 +136,9 @@ async def messages(client):
             if topic_text == mqtt_topics()['ha_set']:
                 handle_ha_command(payload)
                 continue
+            if topic_text == mqtt_topics().get('group'):
+                apply_group(payload)
+                continue
             message_type = payload.get("MessageType")
             parameters = payload.get("Parameters") or {}
 
@@ -164,6 +167,29 @@ async def messages(client):
 
 def mqtt_topics():
     return device_config.mqttconfig.topics()
+
+def apply_group(payload):
+    # The group's state: follow it, changing only what differs (so this device's
+    # own message coming back changes nothing, and an animation isn't restarted).
+    # Straight to the strip, not through device_api: following the group isn't
+    # a local change to pass back to it.
+    import mqttstate
+    from ledstrip import mode_parameters_error
+    try:
+        group = mqttstate.parse_group(payload, MODES, mode_parameters_error)
+    except ValueError as e:
+        Log.warn(TAG, f'Ignoring group state: {e}')
+        return
+    current = led_strip.report()
+    # What was last asked for, in case the strip hasn't applied it yet.
+    current['state'], current['mode'] = led_strip.next_state, led_strip.next_mode
+    for action in mqttstate.group_actions(group, current, device_config.mqttconfig.group_brightness):
+        if action[0] == 'power':
+            led_strip.set_next_state(action[1])
+        elif action[0] == 'mode':
+            led_strip.set_next_mode(action[1], action[2] or device_config.mode_parameters)
+        else:
+            led_strip.set_brightness(action[1])
 
 def handle_ha_command(payload):
     import mqttstate
@@ -196,6 +222,8 @@ async def up(client):
         Log.info(TAG,'Subscribed to Control Topic')
         if ha:
             await client.subscribe(t['ha_set'], 1)
+        if 'group' in t:
+            await client.subscribe(t['group'], 1)  # the retained state arrives straight away
         await client.publish(t['status'], mqttstate.ONLINE, retain=True)
         await clear_retired_topics(client, t)
         # With discovery off, an empty retained config removes any earlier one.
@@ -206,6 +234,29 @@ async def up(client):
             await client.publish(t['ha_sensor_' + key], discovery, retain=True)
         await send_info(client, t)
         led_strip.changed.set()  # publish the current state now that we're connected
+
+GROUP_SETTLE_MS = 300
+
+async def publish_group(client):
+    # Passes local changes on to the group, as its new (retained) state. Waits a
+    # moment after each change, so dragging the colour picker or brightness
+    # slider makes one message rather than dozens, and the strip has applied it.
+    import mqttstate
+    t = mqtt_topics()
+    if 'group' not in t:
+        return
+    Log.info(TAG, f'In group {device_config.mqttconfig.group}')
+    while True:
+        await device_api.local_change.wait()
+        await asyncio.sleep_ms(GROUP_SETTLE_MS)
+        device_api.local_change.clear()
+        if not client.isconnected():
+            continue
+        try:
+            await client.publish(t['group'], mqttstate.group_payload(led_strip.report(), device_config.mqttconfig.client_id),
+                                 retain=True)
+        except OSError as e:
+            Log.warn(TAG, f'Failed to publish group state: {e}')
 
 async def clear_retired_topics(client, t):
     # Empty retained messages remove what was left on topics the device no
@@ -358,7 +409,7 @@ async def main(client):
             await client.connect()
             Log.info(TAG,'Creating MQTT tasks')
             device_api.mqtt_error = None
-            for coroutine in (up, down, messages, publish_state, publish_info):
+            for coroutine in (up, down, messages, publish_state, publish_info, publish_group):
                 asyncio.create_task(coroutine(client))
             break
         except OSError as e:

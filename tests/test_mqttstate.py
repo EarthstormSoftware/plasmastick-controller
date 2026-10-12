@@ -252,3 +252,67 @@ def test_sensor_discovery_reads_the_info_topic(key):
 def test_unknown_sensor():
     with pytest.raises(ValueError):
         mqttstate.ha_sensor_discovery_payload('PorchLights', mqttstate.topics('PorchLights'), 'nope')
+
+
+def test_group_topic_only_when_in_a_group():
+    assert 'group' not in mqttstate.topics('Porch')
+    t = mqttstate.topics('Porch', group='garden')
+    assert t['group'] == 'plasmastick/group/garden'
+    assert t['group'] not in [t[k] for k in mqttstate.RETAINED]  # others still use it
+
+
+@pytest.mark.parametrize('group, ok', [('', True), ('garden', True), ('Back_Yard-2', True), ('x' * 32, True),
+                                       ('x' * 33, False), ('a/b', False), ('a+b', False), ('a b', False), (None, False)])
+def test_group_names(group, ok):
+    assert (mqttstate.group_error(group) is None) == ok
+
+
+def report(**kw):
+    r = {'state': True, 'mode': 'Colour', 'colour': '#ffb46b', 'style': None, 'brightness': 66}
+    r.update(kw)
+    return r
+
+
+def roundtrip(rep):
+    from ledstrip import mode_parameters_error
+    return mqttstate.parse_group(json.loads(mqttstate.group_payload(rep, 'Porch')), MODES, mode_parameters_error)
+
+
+def test_group_payload_carries_only_the_defining_parameter():
+    assert json.loads(mqttstate.group_payload(report(), 'Porch')) == {
+        'State': True, 'Mode': 'Colour', 'ModeParameters': {'Colour': '#ffb46b'}, 'Brightness': 66, 'From': 'Porch'}
+    cheer = json.loads(mqttstate.group_payload(report(mode='CheerLights', colour='#ff0000'), 'Porch'))
+    assert cheer['ModeParameters'] == {}  # each member fetches its own colour
+    xmas = json.loads(mqttstate.group_payload(report(mode='Christmas', colour=None, style='Fade'), 'Porch'))
+    assert xmas['ModeParameters'] == {'Style': 'Fade'}
+
+
+@pytest.mark.parametrize('rep', [report(), report(state=False), report(mode='Rainbows', colour=None),
+                                 report(mode='CheerLights', colour='#00ff00'),
+                                 report(mode='Christmas', colour=None, style='Twinkle')])
+def test_a_devices_own_group_message_changes_nothing(rep):
+    assert mqttstate.group_actions(roundtrip(rep), rep, True) == []
+
+
+def test_following_the_group():
+    group = roundtrip(report(state=True, mode='Christmas', colour=None, style='Fade', brightness=30))
+    here = report(state=False, mode='Christmas', colour=None, style='Twinkle', brightness=80)
+    assert mqttstate.group_actions(group, here, True) == [
+        ('power', True), ('mode', 'Christmas', {'Style': 'Fade'}), ('brightness', 30)]
+    assert mqttstate.group_actions(group, here, False) == [('power', True), ('mode', 'Christmas', {'Style': 'Fade'})]
+    # A colour change is a change; the same colour in other letters isn't.
+    assert mqttstate.group_actions(roundtrip(report(colour='#FFC0CB')), report(colour='#ffc0cb'), True) == []
+    assert mqttstate.group_actions(roundtrip(report(colour='#0000ff')), report(), True) == [
+        ('mode', 'Colour', {'Colour': '#0000ff'})]
+
+
+@pytest.mark.parametrize('payload', [
+    'not an object', {'State': 'yes', 'Mode': 'Colour', 'Brightness': 50},
+    {'State': True, 'Mode': 'Disco', 'Brightness': 50},
+    {'State': True, 'Mode': 'Colour', 'ModeParameters': {'Colour': 'pink'}, 'Brightness': 50},
+    {'State': True, 'Mode': 'Christmas', 'ModeParameters': {'Style': 'Disco'}, 'Brightness': 50},
+    {'State': True, 'Mode': 'Colour', 'Brightness': 0}, {'State': True, 'Mode': 'Colour', 'Brightness': True}])
+def test_unusable_group_messages_are_refused_whole(payload):
+    from ledstrip import mode_parameters_error
+    with pytest.raises(ValueError):
+        mqttstate.parse_group(payload, MODES, mode_parameters_error)

@@ -31,7 +31,9 @@
         "queue_len": 1,
         "ha_discovery": false,
         "topic_base": "/home/device/{name}",
-        "ha_prefix": "homeassistant"
+        "ha_prefix": "homeassistant",
+        "group": "",
+        "group_brightness": true
     },
     "web": {
         "password": ""

@@ -14,6 +14,9 @@ device name) and Home Assistant discovery prefix (mqtt.ha_prefix):
   <base>/ha/set       Home Assistant JSON light commands
   <ha_prefix>/light/<name>/config   retained discovery config (if enabled)
   <ha_prefix>/sensor/<name>/<key>/config   the same for the info sensors
+  plasmastick/group/<group>   retained: the group's state, if the device is in a
+                      group (mqtt.group): every member follows it and publishes
+                      its own local changes to it
 """
 import ujson
 
@@ -21,6 +24,9 @@ ONLINE = 'online'
 OFFLINE = 'offline'
 
 DEFAULT_TOPIC_BASE = '/home/device/{name}'
+# Shared by every member of a group, whatever their own topic base.
+GROUP_PREFIX = 'plasmastick/group/'
+_GROUP_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
 DEFAULT_HA_PREFIX = 'homeassistant'
 MAX_TOPIC_PREFIX_LEN = 100
 
@@ -72,7 +78,16 @@ def ha_prefix_error(prefix):
     return _prefix_error(prefix, 'ha_prefix', False)
 
 
-def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX):
+def group_error(group):
+    """None if group works as mqtt.group ('' for none), else why not."""
+    if not isinstance(group, str) or len(group) > 32 or any(c not in _GROUP_CHARS for c in group):
+        return 'group must be up to 32 letters, digits, - or _'
+    return None
+
+
+def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX, group=''):
+    """The device's topics. 'group' is there only when the device is in a group;
+    it isn't in RETAINED, as other members still use it after this one leaves."""
     base = base.replace('{name}', client_id)
     t = {
         'control': base + '/control',
@@ -85,6 +100,8 @@ def topics(client_id, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX):
     }
     for key, _, _ in SENSORS:
         t['ha_sensor_' + key] = ha_prefix + '/sensor/' + client_id + '/' + key + '/config'
+    if group:
+        t['group'] = GROUP_PREFIX + group
     return t
 
 
@@ -112,6 +129,58 @@ def info_payload(info):
     """info: DeviceAPI.get_device_info(). The health figures, as /api/info has them."""
     return ujson.dumps({'version': info['version'], 'uptime_s': info['uptime_s'], 'rssi': info['wifi']['rssi'],
                         'ip': info['wifi']['ip'], 'mem_free': info['mem_free']})
+
+
+# The mode parameter each mode is defined by, for a group (CheerLights fetches
+# its own colour, and the animations have none apart from Christmas's style).
+GROUP_PARAMETER = {'Colour': 'Colour', 'Christmas': 'Style'}
+
+
+def group_payload(report, client_id):
+    """The group's new state after a local change: like the state payload, with
+    only the parameter that defines the mode, and who sent it."""
+    key = GROUP_PARAMETER.get(report['mode'])
+    value = report.get('colour' if key == 'Colour' else 'style') if key else None
+    return ujson.dumps({'State': report['state'], 'Mode': report['mode'],
+                        'ModeParameters': {key: value} if value else {},
+                        'Brightness': report['brightness'], 'From': client_id})
+
+
+def group_actions(group, current, follow_brightness):
+    """What following the group (from parse_group) changes, given what the device
+    shows now (current: {'state', 'mode', 'colour', 'style', 'brightness'}):
+    ('power', bool), ('mode', name, parameters or None) and ('brightness', n).
+    Only differences, so a device's own message coming back changes nothing."""
+    actions = []
+    if group['state'] != current['state']:
+        actions.append(('power', group['state']))
+    key = GROUP_PARAMETER.get(group['mode'])
+    wanted = group['parameters'].get(key) if key else None
+    shown = current.get('colour' if key == 'Colour' else 'style') if key else None
+    if group['mode'] != current['mode'] or (wanted and str(wanted).lower() != str(shown or '').lower()):
+        actions.append(('mode', group['mode'], {key: wanted} if wanted else None))
+    if follow_brightness and group['brightness'] != current['brightness']:
+        actions.append(('brightness', group['brightness']))
+    return actions
+
+
+def parse_group(payload, modes, mode_parameters_error):
+    """A group message as {'state', 'mode', 'parameters', 'brightness'}; raises
+    ValueError if any part is unusable (so nothing half-applies)."""
+    if not isinstance(payload, dict):
+        raise ValueError('group state must be a JSON object')
+    state, mode = payload.get('State'), payload.get('Mode')
+    parameters, brightness = payload.get('ModeParameters') or {}, payload.get('Brightness')
+    if not isinstance(state, bool):
+        raise ValueError('State must be true or false')
+    if mode not in modes:
+        raise ValueError('unknown Mode')
+    error = mode_parameters_error(mode, parameters)
+    if error:
+        raise ValueError(error)
+    if isinstance(brightness, bool) or not isinstance(brightness, int) or not 1 <= brightness <= 100:
+        raise ValueError('Brightness must be 1-100')
+    return {'state': state, 'mode': mode, 'parameters': parameters, 'brightness': brightness}
 
 
 def ha_state_payload(report):

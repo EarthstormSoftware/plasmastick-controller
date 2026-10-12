@@ -352,6 +352,16 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       <div class="note topics" id="topic_preview"></div>
     </div>
     <div class="group">
+      <div class="sec">Group</div>
+      <div class="frow">
+        <div class="field"><label for="mqtt_group">Group Name</label>
+          <input type="text" name="mqtt.group" id="mqtt_group" maxlength="32" placeholder="not in a group" aria-describedby="group_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" name="mqtt.group_brightness" id="group_brightness"> Follow the group's brightness</label>
+      <p class="note" id="group_help">Devices with the same group name follow each other: turn one on, or change its mode or colour, and the rest do the same. Letters, digits, - and _.</p>
+    </div>
+    <div class="group">
       <div class="sec">Home Assistant</div>
       <label class="check"><input type="checkbox" name="mqtt.ha_discovery" id="ha_discovery"> Announce the light to Home Assistant</label>
       <div class="frow">

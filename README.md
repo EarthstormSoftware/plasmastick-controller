@@ -156,6 +156,12 @@ brightness and the modes as effects. Home Assistant controls it through `<base>/
 same device as diagnostic sensors: Wi-Fi signal, uptime, free memory and IP address. Turning discovery off removes them
 on the next connection.
 
+**Groups**: devices given the same group name (`mqtt.group`, MQTT tab) follow each other. A change made on any
+member (web UI, API, button, MQTT or Home Assistant) is published, retained, to `plasmastick/group/<group>`, and
+every member follows it: power, mode, the colour in Colour mode, the style in Christmas, and the brightness unless
+`mqtt.group_brightness` is off. A member that starts up or joins takes the group's current state. CheerLights members
+each fetch the colour themselves, and animations run in each device's own time, so they aren't in step.
+
 Changing the topic base, the discovery prefix or the device name restarts the device. On its next connection it
 clears the retained messages it left on the old topics (after a reset, once MQTT is set up again), so nothing stale is left on the broker or in Home
 Assistant.

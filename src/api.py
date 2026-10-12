@@ -1,5 +1,6 @@
 import gc
 import time
+import uasyncio as asyncio
 import ujson
 import machine
 import network
@@ -60,6 +61,9 @@ class DeviceAPI:
         # Set by main.py: how long the firmware had stalled when the watchdog
         # last restarted the board, or None.
         self.watchdog_stall = None
+        # Set by every change made here (web UI, API, button, MQTT control, Home
+        # Assistant), so app.py can pass it on to the device's group.
+        self.local_change = asyncio.Event()
     
     def set_device_name(self, name):
         """Save device name. It takes effect (MQTT client id, hostname) after a restart."""
@@ -116,12 +120,14 @@ class DeviceAPI:
     def power_on(self):
         """Turn device on."""
         self.led_strip.set_next_state(True)
+        self.local_change.set()
         Log.info(TAG, 'Power ON')
         return True
     
     def power_off(self):
         """Turn device off."""
         self.led_strip.set_next_state(False)
+        self.local_change.set()
         Log.info(TAG, 'Power OFF')
         return True
     
@@ -131,6 +137,7 @@ class DeviceAPI:
         # are deterministic even before LED controller applies current_state.
         new_state = not self.led_strip.next_state
         self.led_strip.set_next_state(new_state)
+        self.local_change.set()
         Log.info(TAG, 'Power toggled to: {}'.format('ON' if new_state else 'OFF'))
         return new_state
     
@@ -145,6 +152,7 @@ class DeviceAPI:
                 self.led_strip.set_next_mode(mode, parameters)
             else:
                 self.led_strip.set_next_mode(mode, self.device_config.mode_parameters)
+            self.local_change.set()
             Log.info(TAG, f'Mode set to: {mode}')
             return True
         return False
@@ -156,6 +164,7 @@ class DeviceAPI:
         if not is_valid_brightness(brightness):
             return False
         self.led_strip.set_brightness(brightness)
+        self.local_change.set()
         Log.info(TAG, f'Brightness set to: {brightness}%')
         return True
 
@@ -194,6 +203,8 @@ class DeviceAPI:
                 'ha_discovery': dc.mqttconfig.ha_discovery,
                 'topic_base': self._config_cache['mqtt']['topic_base'],
                 'ha_prefix': self._config_cache['mqtt']['ha_prefix'],
+                'group': self._config_cache['mqtt']['group'],
+                'group_brightness': self._config_cache['mqtt']['group_brightness'],
             },
             'web': {
                 'password_set': bool(self.web_password_hash),
@@ -319,6 +330,15 @@ class DeviceAPI:
                 if v < 1:
                     return False, 'queue_len must be >= 1'
                 cfg['mqtt']['queue_len'] = v
+            if 'group' in mqtt:
+                import mqttstate
+                v = str(mqtt['group']).strip()
+                error = mqttstate.group_error(v)
+                if error:
+                    return False, error
+                cfg['mqtt']['group'] = v
+            if 'group_brightness' in mqtt:
+                cfg['mqtt']['group_brightness'] = bool(mqtt['group_brightness'])
             if 'topic_base' in mqtt or 'ha_prefix' in mqtt:
                 import mqttstate
                 for key, check in (('topic_base', mqttstate.topic_base_error), ('ha_prefix', mqttstate.ha_prefix_error)):

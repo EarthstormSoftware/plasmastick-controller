@@ -53,6 +53,10 @@ _DEFAULT_CONFIG = {
         # Where the topics go: {name} is the device name (see mqttstate.py).
         "topic_base": "/home/device/{name}",
         "ha_prefix": "homeassistant",
+        # Devices with the same group name follow each other (see mqttstate.py);
+        # empty: not in a group. group_brightness: follow its brightness too.
+        "group": "",
+        "group_brightness": True,
     },
     "web": {
         # A hash of the password (see passwords.py). Empty: the web UI and API
@@ -382,6 +386,8 @@ class MQTTConfig:
         self.ha_discovery = bool(mqttconfig.get("ha_discovery", False))
         self.topic_base = mqttconfig.get("topic_base", "")
         self.ha_prefix = mqttconfig.get("ha_prefix", "")
+        self.group = mqttconfig.get("group", "")
+        self.group_brightness = bool(mqttconfig.get("group_brightness", True))
         self._topics = None
 
     def is_enabled(self):
@@ -390,7 +396,7 @@ class MQTTConfig:
     def topics(self):
         """The device's topics (see mqttstate.topics), worked out once."""
         if self._topics is None:
-            self._topics = mqtt_topics(self.client_id, self.topic_base, self.ha_prefix)
+            self._topics = mqtt_topics(self.client_id, self.topic_base, self.ha_prefix, self.group)
         return self._topics
 
     def to_mqtt_as_config(self):
@@ -408,9 +414,9 @@ class MQTTConfig:
         return cfg
 
 
-def mqtt_topics(client_id, base, prefix):
+def mqtt_topics(client_id, base, prefix, group=''):
     """mqttstate.topics(), except that a hand-edited base or prefix that isn't
-    usable falls back to the default."""
+    usable falls back to the default (and an unusable group to none)."""
     import mqttstate
     if mqttstate.topic_base_error(base):
         Log.warn(TAG, f'Unusable mqtt.topic_base {base!r}; using {mqttstate.DEFAULT_TOPIC_BASE}')
@@ -418,4 +424,7 @@ def mqtt_topics(client_id, base, prefix):
     if mqttstate.ha_prefix_error(prefix):
         Log.warn(TAG, f'Unusable mqtt.ha_prefix {prefix!r}; using {mqttstate.DEFAULT_HA_PREFIX}')
         prefix = mqttstate.DEFAULT_HA_PREFIX
-    return mqttstate.topics(client_id, base, prefix)
+    if mqttstate.group_error(group):
+        Log.warn(TAG, f'Unusable mqtt.group {group!r}; not joining a group')
+        group = ''
+    return mqttstate.topics(client_id, base, prefix, group)

@@ -307,3 +307,22 @@ def test_watchdog_setting_needs_a_restart(api):
     assert saved_config(api)['device']['watchdog'] is False
     assert api.restart_required()
     assert api.get_device_info()['watchdog_stall'] is None
+
+
+def test_group_settings_are_checked_and_need_a_restart(api):
+    assert api.get_config()['mqtt']['group'] == '' and api.get_config()['mqtt']['group_brightness'] is True
+    assert api.save_config({'mqtt': {'group': 'a/b'}}) == (False, 'group must be up to 32 letters, digits, - or _')
+    assert api.save_config({'mqtt': {'group': ' garden ', 'group_brightness': False}}) == (True, None)
+    assert saved_config(api)['mqtt']['group'] == 'garden'
+    assert api.restart_required()
+
+
+def test_every_local_change_is_signalled_for_the_group(api):
+    for action in (api.power_on, api.power_off, api.toggle_power, lambda: api.set_mode('Rainbows'),
+                   lambda: api.set_brightness(40)):
+        api.local_change.clear()
+        action()
+        assert api.local_change.is_set()
+    api.local_change.clear()
+    assert not api.set_mode('Disco') and not api.set_brightness(0)
+    assert not api.local_change.is_set()  # refused changes aren't changes
