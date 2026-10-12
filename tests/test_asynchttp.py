@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+import asyncdns
 import asynchttp
 
 
@@ -38,7 +39,7 @@ async def serve(response, delay=0.0):
 
 
 def run(coro):
-    asynchttp._addresses.clear()
+    asyncdns._cache.clear()
     return asyncio.run(coro)
 
 
@@ -52,17 +53,17 @@ def test_get_json_reads_the_body():
     result, requests = run(go())
     assert result == {'field2': '#ffc0cb'}
     assert requests[0].startswith(b'GET /last.json HTTP/1.0\r\nHost: 127.0.0.1\r\n')
-    assert asynchttp._addresses == {'127.0.0.1': '127.0.0.1'}
 
 
 def test_http_errors_raise_and_drop_the_cached_address():
     async def go():
+        asyncdns._cache['cheerlights.test'] = '127.0.0.1'  # as if looked up
         server, url, _ = await serve(b'HTTP/1.1 404 Not Found\r\n\r\nnope')
         async with server:
             with pytest.raises(OSError, match='404'):
-                await asynchttp.get_json(url)
+                await asynchttp.get_json(url.replace('127.0.0.1', 'cheerlights.test'))
     run(go())
-    assert asynchttp._addresses == {}
+    assert asyncdns._cache == {}
 
 
 def test_a_slow_server_times_out():

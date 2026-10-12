@@ -1,7 +1,7 @@
 import gc
-import socket
 import ujson
 import uasyncio as asyncio
+import asyncdns
 from log import Log
 
 TAG = "HTTPC"
@@ -9,10 +9,6 @@ TAG = "HTTPC"
 # Bodies beyond this are cut off; the JSON this is used for is a few hundred bytes.
 MAX_BODY = 4096
 
-# getaddrinfo blocks the whole event loop until DNS answers (it has no timeout),
-# so each host is looked up once and the address reused. A failed connection
-# or timeout drops the entry, so a host that moves is looked up again next time.
-_addresses = {}
 
 
 def parse_url(url):
@@ -26,15 +22,6 @@ def parse_url(url):
     use_tls = scheme == 'https'
     port = int(port) if port else (443 if use_tls else 80)
     return use_tls, host, port, '/' + path
-
-
-def _address(host, port):
-    ip = _addresses.get(host)
-    if ip is None:
-        Log.debug(TAG, f'Looking up {host}')
-        ip = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0][-1][0]
-        _addresses[host] = ip
-    return ip
 
 
 async def _open_tls(ip, port, host):
@@ -54,7 +41,9 @@ async def _open_tls(ip, port, host):
 
 
 async def _get(use_tls, host, port, path):
-    ip = _address(host, port)
+    # asyncdns keeps the address; a failure below forgets it, so a host that
+    # moves is looked up again next time.
+    ip = await asyncdns.resolve(host)
     if use_tls:
         # Note: the TLS handshake's key exchange still holds the CPU for
         # around 0.7 s on an RP2040; plain http avoids that.
@@ -85,11 +74,11 @@ async def _get(use_tls, host, port, path):
 
 
 async def get_json(url, timeout_s=10):
-    """GET url and parse the body as JSON without blocking other tasks
-    (apart from the first DNS lookup of each host). Raises on any failure."""
+    """GET url and parse the body as JSON without blocking other tasks.
+    Raises on any failure."""
     use_tls, host, port, path = parse_url(url)
     try:
         return await asyncio.wait_for(_get(use_tls, host, port, path), timeout_s)
     except BaseException:
-        _addresses.pop(host, None)
+        asyncdns.forget(host)
         raise

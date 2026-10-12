@@ -5,6 +5,7 @@ import threading
 
 import pytest
 
+import asyncdns
 import ntp
 
 UNIX_2026 = 1791800000  # 2026-10-12, roughly
@@ -34,7 +35,7 @@ def server(monkeypatch):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind(('127.0.0.1', 0))
     monkeypatch.setattr(ntp, 'NTP_PORT', s.getsockname()[1])
-    ntp._addresses.clear()
+    asyncdns._cache.clear()
     queries = []
 
     def serve():
@@ -56,7 +57,8 @@ def test_fetch_gives_up_when_nobody_answers(monkeypatch):
     quiet = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     quiet.bind(('127.0.0.1', 0))
     monkeypatch.setattr(ntp, 'NTP_PORT', quiet.getsockname()[1])
+    asyncdns._cache['time.test'] = '127.0.0.1'  # as if looked up
     with pytest.raises(OSError):
-        asyncio.run(ntp.fetch('127.0.0.1', timeout_ms=200))
-    assert '127.0.0.1' not in ntp._addresses  # looked up afresh next time
+        asyncio.run(ntp.fetch('time.test', timeout_ms=200))
+    assert 'time.test' not in asyncdns._cache  # looked up afresh next time
     quiet.close()

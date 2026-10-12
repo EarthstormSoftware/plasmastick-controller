@@ -1,17 +1,17 @@
 """Sets the board's clock (UTC) from an NTP server.
 
-Asks with a non-blocking UDP socket and waits with asyncio, so only the first
-DNS lookup holds up the event loop (the address is kept after that). The
-board has no battery-backed clock: until this has run, it thinks it's 2021.
+Asks with a non-blocking UDP socket and waits with asyncio (and looks the
+server up with asyncdns), so it never holds up the event loop. The board has
+no battery-backed clock: until this has run, it thinks it's 2021.
 """
 import socket
 import struct
 import time
 import uasyncio as asyncio
+import asyncdns
 
 NTP_PORT = 123
 NTP_TO_UNIX = 2208988800  # seconds from 1900 (NTP) to 1970 (the board's epoch)
-_addresses = {}
 
 
 def unix_seconds(reply):
@@ -30,9 +30,7 @@ def unix_seconds(reply):
 
 async def fetch(host, timeout_ms=3000):
     """The time from host, as seconds since 1970. Raises OSError or ValueError."""
-    addr = _addresses.get(host)
-    if addr is None:
-        addr = _addresses[host] = socket.getaddrinfo(host, NTP_PORT)[0][-1]
+    addr = (await asyncdns.resolve(host), NTP_PORT)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.setblocking(False)
@@ -45,7 +43,7 @@ async def fetch(host, timeout_ms=3000):
                 return unix_seconds(s.recv(64))
             except OSError:  # nothing yet
                 if waited >= timeout_ms:
-                    _addresses.pop(host, None)  # look it up again next time
+                    asyncdns.forget(host)  # look it up again next time
                     raise OSError('no answer from ' + host)
                 await asyncio.sleep_ms(50)
                 waited += 50
