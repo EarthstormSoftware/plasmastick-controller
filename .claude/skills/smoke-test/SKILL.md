@@ -43,7 +43,7 @@ This saves the full log to `build/device.log` and ends with `SUMMARY`, `MILESTON
   held at power-on. Stop and tell the user. The remaining steps can't run.
 - Any `PROBLEM traceback`, `error` or `memory` line is a failure. Read `build/device.log` around it and include the
   relevant lines in the report. `warning` lines are worth listing, but are not failures on their own.
-- `HEAP` gives free heap after boot (about 85-95 KB is normal). Note it for comparison.
+- `HEAP` gives free heap after boot (about 80-90 KB is normal; 78-79 KB once running with MQTT). Note it for comparison.
 - Note the `hostname` and `wlan` (IP) values for step 4.
 
 If the board resets itself while the log is open (completing setup does), the capture notes it and carries on.
