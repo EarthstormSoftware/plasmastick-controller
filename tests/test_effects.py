@@ -223,3 +223,66 @@ def test_reversed_horizontal_waves_travel_the_other_way():
     random.seed(8)
     pb = run(b, 40, 20)
     assert pa != pb
+
+
+def test_christmas_bulbs_repeat_red_green_gold_blue():
+    random.seed(9)
+    pixels = run(effects.Christmas(8, 'horizontal', False, 'Twinkle'), 8, 1)
+    red, green, gold, blue = pixels[:4]
+    assert red[0] > red[1] and green[1] > green[0] and gold[0] > gold[1] > gold[2] and blue[2] > blue[0]
+    assert pixels[4:] != [None] * 4
+
+
+def test_twinkling_bulbs_change_brightness():
+    random.seed(10)
+    xmas = effects.Christmas(40, 'bottle', False, 'Twinkle')
+    seen = {run(xmas, 40, 1, light_output(66))[0] for _ in range(300)}
+    assert len(seen) > 5
+
+
+@pytest.mark.parametrize('percent', [1, 2, 5, 10])
+def test_dim_twinkling_bulbs_stay_lit_and_keep_their_colour(percent):
+    random.seed(11)
+    xmas = effects.Christmas(8, 'bottle', False, 'Twinkle')
+    for _ in range(300):
+        red, green, gold, blue = run(xmas, 8, 1, light_output(percent))[:4]
+        for p in (red, green, gold, blue):
+            assert max(p) >= effects.MIN_VISIBLE, (percent, p)
+        assert red[0] > red[1] and green[1] > green[0] and blue[2] > blue[0]
+
+
+def test_fade_holds_then_moves_each_bulb_to_the_next_colour():
+    xmas = effects.Christmas(8, 'horizontal', False, 'Fade')
+    strip = Strip(8)
+    xmas.frame(strip, 1.0)
+    start = list(strip.pixels)
+    for _ in range(100):  # still holding
+        xmas.frame(strip, 1.0)
+    assert strip.pixels == start
+    for _ in range(156):  # one full colour step on
+        xmas.frame(strip, 1.0)
+    assert strip.pixels == start[1:] + start[:1]
+
+
+def test_reversed_fade_drifts_the_other_way():
+    a, b = effects.Christmas(8, 'horizontal', False, 'Fade'), effects.Christmas(8, 'horizontal', True, 'Fade')
+    sa, sb = Strip(8), Strip(8)
+    for _ in range(256):
+        a.frame(sa, 1.0)
+        b.frame(sb, 1.0)
+    assert sa.pixels != sb.pixels
+
+
+def test_christmas_style_is_checked():
+    from ledstrip import mode_parameters_error
+    assert mode_parameters_error('Christmas', {'Style': 'Fade'}) is None
+    assert mode_parameters_error('Christmas', {'Style': 'Disco'}) == 'Style must be one of Twinkle, Fade'
+
+
+def test_changing_the_default_style_remakes_the_animation(strip):
+    strip.current_mode = 'Christmas'
+    strip.mode_parameters = None
+    first = strip._animation()
+    assert not first.fade
+    strip.device_config.christmas_style = 'Fade'
+    assert strip._animation().fade

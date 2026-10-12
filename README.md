@@ -6,8 +6,12 @@ API, MQTT, or the button on the board.
 
 ## Features
 
-- Lighting modes: a single **Colour**, **Rainbows**, and **CheerLights** (follows the global
-  [CheerLights](https://cheerlights.com) colour). CheerLights polls `device.cheerlights_url` (default
+- Lighting modes: a single **Colour**, **CheerLights** (follows the global [CheerLights](https://cheerlights.com)
+  colour), and the animations **Rainbows**, **Fire**, **Ocean** and **Christmas**. Christmas has two styles:
+  **Twinkle** (red, green, gold and blue bulbs, each gently brightening and dimming) and **Fade** (each bulb fades
+  into the next colour, so the pattern drifts). Ask for one with `"ModeParameters": {"Style": "Fade"}`; without one,
+  the default style (`device.christmas_style`, Device tab) is used, as when Home Assistant picks the effect.
+  CheerLights polls `device.cheerlights_url` (default
   `http://api.thingspeak.com/channels/1417/field/2/last.json`, every 120 s); the feed must return only the latest
   entry, with the colour in a top-level `field2`. Use `http://`: see [Known Restrictions](#known-restrictions) for
   `https://`.

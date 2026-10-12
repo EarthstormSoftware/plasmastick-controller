@@ -4,7 +4,7 @@ import ujson
 import machine
 import network
 from log import Log
-from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, is_valid_brightness, mqtt_topics
+from deviceconfig import DeviceConfig, DEVICE_NAME_FILE, LED_LAYOUTS, CHRISTMAS_STYLES, is_valid_brightness, mqtt_topics
 from passwords import hash_password
 from wificrypto import encrypt_password
 from deviceidentity import sanitize_device_name
@@ -17,7 +17,8 @@ TAG = "API"
 # Device settings that are read where they're used, so a save applies them at
 # once. Everything else is only read at boot and needs a restart.
 LIVE_DEVICE_KEYS = ('default_mode', 'mode_parameters', 'default_state', 'default_brightness',
-                    'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse')
+                    'cheerlights_url', 'cheerlights_update_interval', 'log_level', 'led_layout', 'led_reverse',
+                    'christmas_style')
 
 
 def restart_settings(cfg):
@@ -92,6 +93,7 @@ class DeviceAPI:
             'state': self.led_strip.current_state,
             'mode': self.led_strip.current_mode,
             'colour': self.led_strip.current_colour,
+            'style': self.led_strip.style(),
             'brightness': self.led_strip.brightness,
             'modes': MODES,
             'led_count': self.device_config.device_led_count,
@@ -169,6 +171,7 @@ class DeviceAPI:
                 'log_level': dc.log_level,
                 'led_layout': dc.led_layout,
                 'led_reverse': dc.led_reverse,
+                'christmas_style': dc.christmas_style,
             },
             'wlan': {
                 'ssid': dc.wlanconfig.ssid,
@@ -259,6 +262,10 @@ class DeviceAPI:
                 cfg['device']['led_layout'] = dev['led_layout']
             if 'led_reverse' in dev:
                 cfg['device']['led_reverse'] = bool(dev['led_reverse'])
+            if 'christmas_style' in dev:
+                if dev['christmas_style'] not in CHRISTMAS_STYLES:
+                    return False, 'christmas_style must be one of ' + ', '.join(CHRISTMAS_STYLES)
+                cfg['device']['christmas_style'] = dev['christmas_style']
             if 'log_level' in dev:
                 v = int(dev['log_level'])
                 if v not in (0, 1, 2):

@@ -160,11 +160,17 @@ def test_strip_reports_what_it_shows_and_signals_changes(tmp_path, monkeypatch):
     async def go():
         on_pink = await apply(lambda: (strip.set_next_state(True), strip.set_next_mode('Colour', {'Colour': '#ffc0cb'})))
         rainbows = await apply(lambda: strip.set_next_mode('Rainbows'))
-        return on_pink, rainbows
+        christmas = await apply(lambda: strip.set_next_mode('Christmas'))
+        fade = await apply(lambda: strip.set_next_mode('Christmas', {'Style': 'Fade'}))
+        return on_pink, rainbows, christmas, fade
 
-    on_pink, rainbows = asyncio.run(go())
-    assert on_pink == {'state': True, 'mode': 'Colour', 'colour': '#ffc0cb', 'brightness': 66}
-    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'brightness': 66}
+    on_pink, rainbows, christmas, fade = asyncio.run(go())
+    assert on_pink == {'state': True, 'mode': 'Colour', 'colour': '#ffc0cb', 'style': None, 'brightness': 66}
+    assert rainbows == {'state': True, 'mode': 'Rainbows', 'colour': None, 'style': None, 'brightness': 66}
+    # No style asked for: the default.
+    assert christmas == {'state': True, 'mode': 'Christmas', 'colour': None, 'style': 'Twinkle', 'brightness': 66}
+    assert fade['style'] == 'Fade'
+    assert json.loads(mqttstate.state_payload(fade))['ModeParameters'] == {'Style': 'Fade'}
 
 
 def test_brightness_scales_what_is_painted_and_signals_a_change(tmp_path, monkeypatch):

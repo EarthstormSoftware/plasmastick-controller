@@ -3,12 +3,12 @@ import plasma
 import uasyncio as asyncio
 import asynchttp
 from log import Log
-from deviceconfig import DEFAULT_COLOUR
+from deviceconfig import DEFAULT_COLOUR, CHRISTMAS_STYLES
 
 TAG = "LEDS"
 
 # The animated modes, drawn by effects.py (its EFFECTS has the same names).
-EFFECT_MODES = ('Rainbows', 'Fire', 'Ocean')
+EFFECT_MODES = ('Rainbows', 'Fire', 'Ocean', 'Christmas')
 # The lighting modes the strip supports.
 MODES = ('Colour', 'CheerLights') + EFFECT_MODES
 
@@ -42,6 +42,8 @@ def mode_parameters_error(mode, parameters):
         return 'Mode parameters must be an object'
     if mode == 'Colour' and 'Colour' in parameters and not is_valid_colour(parameters['Colour']):
         return 'Colour must be a #RRGGBB hex colour'
+    if mode == 'Christmas' and 'Style' in parameters and parameters['Style'] not in CHRISTMAS_STYLES:
+        return 'Style must be one of ' + ', '.join(CHRISTMAS_STYLES)
     return None
 
 class LedStrip:
@@ -70,6 +72,7 @@ class LedStrip:
         self._effect = None
         self._effect_layout = None
         self._effect_reverse = None
+        self._effect_style = None
 
         # Cache for hex color conversion
         self._cached_hex_colour = None
@@ -158,7 +161,14 @@ class LedStrip:
     def report(self):
         """What the strip is showing: {'state', 'mode', 'colour'}."""
         return {'state': self.current_state, 'mode': self.current_mode, 'colour': self.current_colour,
-                'brightness': self.brightness}
+                'style': self.style(), 'brightness': self.brightness}
+
+    def style(self):
+        """The Christmas style showing (the request's, else the default), or None in other modes."""
+        if self.current_mode != 'Christmas':
+            return None
+        style = self.mode_parameters.get('Style') if isinstance(self.mode_parameters, dict) else None
+        return style if style in CHRISTMAS_STYLES else self.device_config.christmas_style
 
     def paint(self, colour):
         """Set every LED to colour ('#rrggbb'), scaled by the brightness."""
@@ -201,13 +211,15 @@ class LedStrip:
 
     def _animation(self):
         """The effect for the current mode, made afresh after a mode change or
-        when the LED layout setting changes (it applies without a restart)."""
+        when the LED layout or Christmas style changes (they apply without a restart)."""
         dc = self.device_config
-        if self._effect is None or dc.led_layout != self._effect_layout or dc.led_reverse != self._effect_reverse:
+        style = self.style()
+        if (self._effect is None or dc.led_layout != self._effect_layout or dc.led_reverse != self._effect_reverse
+                or style != self._effect_style):
             import effects
             reverse = dc.led_reverse and dc.led_layout != 'bottle'
-            self._effect = effects.EFFECTS[self.current_mode](dc.device_led_count, dc.led_layout, reverse)
-            self._effect_layout, self._effect_reverse = dc.led_layout, dc.led_reverse
+            self._effect = effects.EFFECTS[self.current_mode](dc.device_led_count, dc.led_layout, reverse, style)
+            self._effect_layout, self._effect_reverse, self._effect_style = dc.led_layout, dc.led_reverse, style
         return self._effect
 
     async def controller(self):        

@@ -29,6 +29,8 @@ _DEFAULT_CONFIG = {
         # led_reverse flips a strip (vertical: the first LED is at the top).
         "led_layout": "bottle",
         "led_reverse": False,
+        # The Christmas style when a request doesn't name one: see CHRISTMAS_STYLES.
+        "christmas_style": "Twinkle",
     },
     "wlan": {
         "ssid": "",
@@ -60,6 +62,7 @@ _DEFAULT_CONFIG = {
 
 DEVICE_NAME_FILE = "device_name.json"
 LED_LAYOUTS = ("bottle", "horizontal", "vertical")
+CHRISTMAS_STYLES = ("Twinkle", "Fade")
 RETIRED_TOPICS_FILE = "retired_topics.json"
 
 
@@ -177,6 +180,10 @@ class DeviceConfig:
             Log.warn(TAG, f'Ignoring led_layout {self.led_layout!r}; it must be one of {", ".join(LED_LAYOUTS)}')
             self.led_layout = "bottle"
         self.led_reverse = bool(configdata["device"]["led_reverse"])
+        self.christmas_style = configdata["device"]["christmas_style"]
+        if self.christmas_style not in CHRISTMAS_STYLES:
+            Log.warn(TAG, f'Ignoring christmas_style {self.christmas_style!r}; it must be one of {", ".join(CHRISTMAS_STYLES)}')
+            self.christmas_style = "Twinkle"
         self.default_brightness = configdata["device"]["default_brightness"]
         if not is_valid_brightness(self.default_brightness):
             Log.warn(TAG, f'Ignoring default_brightness {self.default_brightness!r}; it must be 1-100')

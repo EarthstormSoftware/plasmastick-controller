@@ -11,7 +11,8 @@
         "cheerlights_update_interval": 120,
         "log_level": 1,
         "led_layout": "bottle",
-        "led_reverse": false
+        "led_reverse": false,
+        "christmas_style": "Twinkle"
     },
     "wlan": {
         "ssid": "",

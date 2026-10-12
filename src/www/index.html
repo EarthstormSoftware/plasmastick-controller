@@ -47,8 +47,9 @@ nav label:hover{color:var(--text)}
 #pc{max-width:540px;margin:0 auto}
 /* Mode buttons, three to a row */
 .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
-.modes button{padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
-.modes button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.modes button,.styles button{padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
+.modes button[aria-pressed=true],.styles button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.styles{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;flex:1}
 .crow label{font-size:13px;color:var(--text2);flex:1}
 .reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer}
 .reset:disabled{opacity:.5;cursor:default}
@@ -145,6 +146,13 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
   <div class="sec">Mode</div>
   <!-- Filled in from the device's list of modes (/api/info) -->
   <div class="modes" id="modes" role="group" aria-label="Mode"></div>
+  <!-- Christmas only -->
+  <div class="crow" id="style_row" hidden>
+    <div class="styles" role="group" aria-label="Christmas style">
+      <button type="button" data-style="Twinkle" aria-pressed="false">Twinkle</button>
+      <button type="button" data-style="Fade" aria-pressed="false">Fade</button>
+    </div>
+  </div>
   <div class="crow" id="colour_row">
     <input type="color" id="colour" value="#ffb46b">
     <label for="colour" id="colour_text">Colour</label>
@@ -201,6 +209,15 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
           <input type="number" required name="device.default_brightness" id="default_brightness" min="1" max="100">
         </div>
       </div>
+      <div class="frow">
+        <div class="field"><label for="christmas_style">Christmas Style</label>
+          <select name="device.christmas_style" id="christmas_style" aria-describedby="style_help">
+            <option value="Twinkle">Twinkle</option>
+            <option value="Fade">Fade</option>
+          </select>
+        </div>
+      </div>
+      <p class="note" id="style_help">Also used whenever Christmas is chosen without a style, as from Home Assistant.</p>
       <div class="frow">
         <div class="field"><label for="default_colour">Colour</label>
           <div class="crow">
@@ -376,12 +393,24 @@ function shown(i, key) {
 // The colour picker and Default button stay in place, enabled in Colour mode only.
 function showMode(mode) {
   modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === mode ? 'true' : 'false'); });
+  el('style_row').hidden = mode !== 'Christmas';
+  var style = info && shown(info, 'style');
+  styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
   el('colour').disabled = mode !== 'Colour';
   el('colour_text').textContent = mode === 'Colour' ? 'Pick a colour'
     : mode === 'CheerLights' && info && info.colour ? 'CheerLights: ' + info.colour : 'Colour mode only';
   showDefault(mode);
 }
 var modeButtons = [];
+var styleButtons = Array.prototype.slice.call(document.querySelectorAll('.styles button'));
+styleButtons.forEach(function (b) {
+  b.addEventListener('click', function () {
+    expect('mode', 'Christmas');
+    expect('style', b.dataset.style);
+    showMode('Christmas');
+    act('/api/mode', { mode: 'Christmas', parameters: { Style: b.dataset.style } });
+  });
+});
 var restarting = false;  // after a save that restarts the device
 
 // The mode buttons and the Default Mode list come from the device's own list,
@@ -573,7 +602,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // and the Save button says so before it's pressed.
 var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
   'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
-  'device.led_reverse', 'web.password', 'web.clear_password'];
+  'device.led_reverse', 'device.christmas_style', 'web.password', 'web.clear_password'];
 var settingsForms = document.querySelectorAll('form.settings');
 
 function fields(f) {

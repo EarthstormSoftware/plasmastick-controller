@@ -279,3 +279,23 @@ def test_led_layout_is_saved_checked_and_applied_live(api):
     assert not api.restart_required()
     assert api.save_config({'device': {'led_layout': 'spiral'}}) == (
         False, 'led_layout must be one of bottle, horizontal, vertical')
+
+
+def test_christmas_style_default_is_saved_checked_and_applied_live(api):
+    assert api.get_config()['device']['christmas_style'] == 'Twinkle'
+    assert api.save_config({'device': {'christmas_style': 'Fade'}}) == (True, None)
+    assert api.device_config.christmas_style == 'Fade' and not api.restart_required()
+    assert api.save_config({'device': {'christmas_style': 'Disco'}}) == (
+        False, 'christmas_style must be one of Twinkle, Fade')
+    assert api.set_mode('Christmas', {'Style': 'Twinkle'})
+    assert not api.set_mode('Christmas', {'Style': 'Disco'})
+
+
+def test_the_page_offers_exactly_the_christmas_styles():
+    import os
+    import re
+    from deviceconfig import CHRISTMAS_STYLES
+    page = open(os.path.join(os.path.dirname(__file__), '..', 'src', 'www', 'index.html'), encoding='utf-8').read()
+    assert tuple(re.findall(r'data-style="(\w+)"', page)) == CHRISTMAS_STYLES
+    select = page.split('id="christmas_style"')[1].split('</select>')[0]
+    assert tuple(re.findall(r'<option value="(\w+)"', select)) == CHRISTMAS_STYLES

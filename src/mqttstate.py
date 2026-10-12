@@ -100,8 +100,10 @@ def _rgb(colour):
 
 
 def state_payload(report):
-    """report: {'state': bool, 'mode': str, 'colour': '#rrggbb' or None, 'brightness': 1-100}."""
-    parameters = {'Colour': report['colour']} if report.get('colour') else {}
+    """report: {'state': bool, 'mode': str, 'colour': '#rrggbb' or None, 'style': str or None,
+    'brightness': 1-100}."""
+    parameters = ({'Colour': report['colour']} if report.get('colour') else
+                  {'Style': report['style']} if report.get('style') else {})
     return ujson.dumps({'State': report['state'], 'Mode': report['mode'], 'ModeParameters': parameters,
                         'Brightness': report['brightness']})
 

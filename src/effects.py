@@ -1,6 +1,7 @@
 """Animated modes, drawn a frame at a time by LedStrip's controller.
 
-Each effect is a class made for the strip's LED count and layout. Its
+Each effect is a class made for the strip's LED count, layout and (for
+Christmas) style. Its
 frame(strip, output) draws one frame and returns the milliseconds to wait
 before the next; output is the share (0-1) of full driver input for the
 brightness (see ledstrip.light_output). Frames use whole numbers and buffers
@@ -56,7 +57,7 @@ class Rainbows:
     # takes about 6.7 s, as it did at 60 frames a second.
     STEP = 328
 
-    def __init__(self, n, layout, reverse):
+    def __init__(self, n, layout, reverse, style=None):
         self.n = n
         self.offset = 0  # 8.8 fixed point: the high byte is the table step
         # Where each LED sits around the colour wheel.
@@ -88,7 +89,7 @@ class Fire:
     """Flames, shaped by the layout: a bottle of embers, flames rising up a
     vertical strip, or a row of flame tips along a horizontal one."""
 
-    def __init__(self, n, layout, reverse):
+    def __init__(self, n, layout, reverse, style=None):
         self.n = n
         self.reverse = reverse
         self.heat = bytearray(n)
@@ -183,7 +184,7 @@ class Ocean:
     and depth up a vertical strip (deep at the bottom, light at the surface).
     Now and then an LED catches the light."""
 
-    def __init__(self, n, layout, reverse):
+    def __init__(self, n, layout, reverse, style=None):
         self.n = n
         self.t = 0
         self.dir = -1 if reverse and layout == 'horizontal' else 1
@@ -228,5 +229,86 @@ class Ocean:
         return FRAME_MS
 
 
+MIN_VISIBLE = 22  # the driver shows anything lower as off (see ledstrip.MIN_VISIBLE)
+
+# Old-fashioned fairy-light bulbs, in order along the string: red, green, gold, blue.
+BULBS = ((255, 8, 0), (0, 190, 20), (255, 130, 10), (10, 40, 255))
+
+
+class Christmas:
+    """Fairy lights: red, green, gold and blue bulbs in turn. Twinkle: each
+    bulb gently brightens and dims on its own. Fade: each bulb holds its
+    colour, then slowly fades into the next one's, so the pattern drifts."""
+
+    # Fade: steps per colour (256) moved per frame: about 8.5 s per colour,
+    # holding for the first FADE_HOLD of them and fading over the rest.
+    FADE_HOLD = 160
+
+    def __init__(self, n, layout, reverse, style=None):
+        self.n = n
+        self.fade = style == 'Fade'
+        self.dir = -1 if reverse else 1
+        self.phase = 0
+        self.colours = bytearray(12)  # the four bulbs at the current brightness
+        self.floor = bytearray(4)  # per bulb, the least twinkle level that keeps it lit
+        self.output = -1
+        self.level = bytearray(n)
+        self.target = bytearray(n)
+        for i in range(n):
+            self.level[i] = self.target[i] = 170 + rand(60)
+
+    def _scale(self, output):
+        level = int(output * 256 + 0.5)
+        for k in range(4):
+            bulb = BULBS[k]
+            # A bulb whose brightest channel would fall under the driver's cut-off
+            # (green, at 1%) is lifted as a whole to just above it.
+            lvl = max(level, (MIN_VISIBLE * 256 + max(bulb) - 1) // max(bulb))
+            for c in range(3):
+                self.colours[3 * k + c] = (bulb[c] * lvl + 128) >> 8
+            # Dimming a bulb below this would take its brightest channel under the
+            # driver's cut-off. Holding the whole bulb here keeps its colour, where
+            # lifting each channel would turn a red with a hint of green yellow.
+            top = max(self.colours[3 * k:3 * k + 3])
+            self.floor[k] = min(255, (MIN_VISIBLE * 256 - 128 + top - 1) // top) if top else 0
+        self.output = output
+
+    def frame(self, strip, output):
+        if output != self.output:
+            self._scale(output)
+        if self.fade:
+            self._fade(strip)
+        else:
+            self._twinkle(strip)
+        return FRAME_MS
+
+    def _twinkle(self, strip):
+        cols, level, target, floor = self.colours, self.level, self.target, self.floor
+        for i in range(self.n):
+            h, g = level[i], target[i]
+            if h == g and getrandbits(3) == 0:
+                # Mostly a resting glow; now and then a dip or a bright moment.
+                r = getrandbits(4)
+                g = target[i] = 255 if r == 0 else 70 + rand(40) if r == 1 else 170 + rand(60)
+            if h != g:
+                h = level[i] = h + (g - h) // 8 if abs(g - h) > 8 else g
+            if h < floor[i & 3]:
+                h = floor[i & 3]
+            k = (i & 3) * 3
+            strip.set_rgb(i, (cols[k] * h + 128) >> 8, (cols[k + 1] * h + 128) >> 8, (cols[k + 2] * h + 128) >> 8)
+
+    def _fade(self, strip):
+        self.phase = (self.phase + 1) & 0x3FF
+        step, frac = self.phase >> 8, self.phase & 255
+        ramp = 0 if frac < self.FADE_HOLD else (frac - self.FADE_HOLD) * 256 // (256 - self.FADE_HOLD)
+        cols, d = self.colours, self.dir
+        for i in range(self.n):
+            a = (i * d + step) & 3
+            ka, kb = a * 3, ((a + 1) & 3) * 3
+            strip.set_rgb(i, cols[ka] + (((cols[kb] - cols[ka]) * ramp) >> 8),
+                          cols[ka + 1] + (((cols[kb + 1] - cols[ka + 1]) * ramp) >> 8),
+                          cols[ka + 2] + (((cols[kb + 2] - cols[ka + 2]) * ramp) >> 8))
+
+
 # The animated modes, by name. ledstrip.EFFECT_MODES lists the same names.
-EFFECTS = {'Rainbows': Rainbows, 'Fire': Fire, 'Ocean': Ocean}
+EFFECTS = {'Rainbows': Rainbows, 'Fire': Fire, 'Ocean': Ocean, 'Christmas': Christmas}
