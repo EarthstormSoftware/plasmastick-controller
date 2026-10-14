@@ -1,7 +1,8 @@
 """Capture the device's serial log and summarise it (host-side, not deployed).
 
-With --reset the board is interrupted and soft-reset first, so the whole boot is
-captured. The log is saved to --out, and a summary of boot milestones, warnings,
+With --reset the board is interrupted and restarted first, so the whole boot is
+captured (if it was still starting Wi-Fi, it is hard-reset, and the first few lines
+are missed). The log is saved to --out, and a summary of boot milestones, warnings,
 errors and tracebacks is printed at the end as SUMMARY/MILESTONE/HEAP/PROBLEM lines
 (HEAP gives the lowest and latest free-heap figures the firmware logged).
 
@@ -51,12 +52,29 @@ def find_pico_port():
     return None
 
 
-def soft_reset(ser):
-    # Ctrl-C stops the firmware and drops to the REPL, Ctrl-D then soft-resets,
+def restart(ser):
+    """Stop the firmware and start it again, to capture the whole boot. Returns
+    the lines the board printed while stopping (the KeyboardInterrupt traceback)."""
+    # Ctrl-C stops the firmware and drops to the REPL; Ctrl-D then soft-resets,
     # which runs main.py again from the start.
     ser.write(b'\x03\x03')
-    time.sleep(0.3)
-    ser.write(b'\x04')
+    stopped = []
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline:
+        raw = ser.readline()
+        if raw:
+            stopped.append(raw.decode('utf-8', errors='replace').rstrip())
+    if any('wlan.py' in line for line in stopped):
+        # Stopped while it was starting Wi-Fi. A soft reset now leaves the Wi-Fi
+        # chip half set up (the next boot gets an address, but nothing gets
+        # through) or hangs the board until it's unplugged, so hard-reset instead.
+        # That starts the chip afresh, but the boot's first lines are lost while
+        # USB reconnects.
+        stopped.append('--- stopped while starting Wi-Fi: hard reset, so the first lines of the boot are missed ---')
+        ser.write(b'import machine; machine.reset()\r')
+    else:
+        ser.write(b'\x04')
+    return stopped
 
 
 def reopen(port, deadline):
@@ -80,7 +98,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--port', help='Serial port (default: first Raspberry Pi USB device)')
     parser.add_argument('--seconds', type=float, default=60, help='How long to read for (default 60)')
-    parser.add_argument('--reset', action='store_true', help='Soft-reset the board first to capture the boot')
+    parser.add_argument('--reset', action='store_true', help='Restart the board first to capture the boot')
     parser.add_argument('--until-ready', action='store_true',
                         help='Stop early once HTTP and MQTT (or MQTT disabled) are up')
     parser.add_argument('--out', default=os.path.join('build', 'device.log'), help='Log file (default build/device.log)')
@@ -107,7 +125,10 @@ def main():
     booted = not args.reset
     try:
         if args.reset:
-            soft_reset(ser)
+            for line in restart(ser):
+                lines.append(line)
+                if not args.quiet:
+                    print(line, flush=True)
         deadline = time.monotonic() + args.seconds
         while time.monotonic() < deadline:
             try:
