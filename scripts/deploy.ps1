@@ -379,8 +379,10 @@ if ($missing.Count -gt 0) {
 }
 
 if (-not $SkipReset) {
-    Write-Host 'Soft resetting device...'
-    Invoke-MpRemote -Args @('exec', 'import machine; machine.soft_reset()') | Out-Null
+    # A hard reset, as at power-on. A soft reset from mpremote exec happens in the
+    # raw REPL, which restarts the interpreter without running main.py.
+    Write-Host 'Resetting device...'
+    Invoke-MpRemote -Args @('reset') | Out-Null
 }
 
 $deployEnd = Get-Date
