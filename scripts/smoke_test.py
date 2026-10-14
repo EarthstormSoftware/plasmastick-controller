@@ -391,7 +391,9 @@ def main():
         return 2
     report('PASS', 'resolve', f'{args.host} -> {ip}')
 
-    dev = Device(args.host, args.timeout, args.password)
+    # By the IPv4 address resolved above: a .local name left to the HTTP client can come
+    # back from Windows' mDNS as an IPv6 address it can't connect to (flowinfo out of range).
+    dev = Device(ip, args.timeout, args.password)
     try:
         original = dev.info()
     except (OSError, RuntimeError) as e:
