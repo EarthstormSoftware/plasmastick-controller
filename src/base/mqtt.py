@@ -6,6 +6,7 @@ The topics hang off mqtt.topic_base ({name} is the device name) and the discover
 
   <base>/status        retained: online, or offline (the will)
   <base>/info          retained: the health figures from /api/info, every minute
+  <base>/log           the device's warnings and errors as it logs them (the last 8 kept while it's offline)
   <base>/state         retained, a product that isn't a light: its state(device), when it calls device.state_changed()
   <base>/set           a product that isn't a light: commands, as a JSON object, for its set(device, command)
   <ha_prefix>/sensor/<name>/<key>/config   retained discovery of the health figures (if it's on)
@@ -35,6 +36,9 @@ DEFAULT_HA_PREFIX = 'homeassistant'
 DEFAULT_PORT = 1883
 
 INFO_INTERVAL_S = 60
+# The warnings and errors kept for the log topic, and how much of each
+LOG_LINES = 8
+LOG_LINE_MAX = 160
 
 # The health figures Home Assistant can show (base.discovery describes them), where the platform has them
 SENSOR_KEYS = ('uptime_s', 'temperature_c', 'load', 'mem_free', 'rssi', 'ip')
@@ -128,7 +132,7 @@ def topics(name, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX, light=Fal
            product_state=False, entities=()):
     """The device's topics by role. entities: a product's Home Assistant entities, as (component, key)."""
     base = base.replace('{name}', name)
-    t = {'status': base + '/status', 'info': base + '/info'}
+    t = {'status': base + '/status', 'info': base + '/info', 'log': base + '/log'}
     if product_state:
         t.update({'state': base + '/state', 'set': base + '/set'})
     for component, key in entities:
@@ -158,7 +162,7 @@ def topics(name, base=DEFAULT_TOPIC_BASE, ha_prefix=DEFAULT_HA_PREFIX, light=Fal
 def retained(t):
     """The topics in t that the device publishes retained."""
     return sorted(topic for role, topic in t.items()
-                  if role not in ('control', 'ha_set', 'alert', 'alert_set', 'group', 'group_old', 'set'))
+                  if role not in ('control', 'ha_set', 'alert', 'alert_set', 'group', 'group_old', 'set', 'log'))
 
 
 def info_payload(info):
@@ -213,6 +217,11 @@ class Mqtt:
         self.entities = getattr(product, 'HA_ENTITIES', ())
         self.topics = self._topics()
         self._changed = asyncio.Event()
+        # The latest warnings and errors, sent to the log topic (not retained) while connected; kept while it isn't,
+        # so the reason for a dropped connection arrives after it. A few lines, cut short: a Pico's heap is small
+        self._log, self._logged = [], asyncio.Event()
+        if self.enabled:
+            Log.sink = self._log_line
 
     def _topics(self):
         s = self.device.settings
@@ -253,7 +262,24 @@ class Mqtt:
             wait = min(wait * 2, 60)
 
     def _tasks(self, client):
-        return [self._publish_state(client), self._publish_info(client)]
+        return [self._publish_state(client), self._publish_info(client), self._publish_log(client)]
+
+    def _log_line(self, line):
+        self._log.append(line[:LOG_LINE_MAX])
+        if len(self._log) > LOG_LINES:
+            self._log.pop(0)
+        self._logged.set()
+
+    async def _publish_log(self, client):
+        try:
+            while True:
+                await self._logged.wait()
+                self._logged.clear()
+                while self._log:
+                    await client.publish(self.topics['log'], self._log[0])
+                    self._log.pop(0)
+        except OSError:
+            client.close()
 
     async def _up(self, client):
         t = self.topics
