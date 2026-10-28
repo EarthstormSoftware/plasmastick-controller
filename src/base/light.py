@@ -376,6 +376,8 @@ class Light:
                         if getattr(effect, 'finished', False):
                             self._effect = None
                             self.set(on=False, transition_ms=0)
+                        # Not held while waiting: after a mode change, the effect (and its module) can go
+                        effect = None
                 except Exception as e:
                     Log.error(TAG, 'Drawing: {}'.format(e))
                     wait = 100
