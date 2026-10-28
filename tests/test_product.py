@@ -29,7 +29,7 @@ def test_every_topic_1_4_used_is_still_used():
 
 
 def test_the_light_entity_is_1_4s():
-    config = json.loads(lightmqtt.ha_light_payload('pumpkin', topics(), product, MODES))
+    config = json.loads(discovery.light('pumpkin', topics(), product, MODES))
     old = v1()['ha_light']
     config['device']['sw_version'] = old['device']['sw_version']
     assert config == old
@@ -120,3 +120,29 @@ def test_the_button_short_long_and_debounced():
     assert events.count('short') == 1 and 'long' not in events
     events = [b.update(raw, ms) for ms, raw in ((1000, True), (1100, True), (1900, True), (2000, False), (2100, False))]
     assert events.count('long') == 1 and 'short' not in events
+
+
+class _Light:
+    def __init__(self, mode):
+        self.mode = mode
+
+
+class _Wake:
+    def __init__(self):
+        self.woken = 0
+
+    def set(self):
+        self.woken += 1
+
+
+def test_effects_are_let_go_when_no_animation_needs_them():
+    import sys
+    import effects  # noqa: F401 (loaded, as an animation would)
+    wake = _Wake()
+    product._changed(_Light('Rainbows'), wake)
+    assert 'effects' in sys.modules
+    for mode in ('Colour', 'CheerLights'):
+        import effects  # noqa: F401,F811
+        product._changed(_Light(mode), wake)
+        assert 'effects' not in sys.modules
+    assert wake.woken == 3  # each change wakes the CheerLights task

@@ -6,6 +6,9 @@ from base.compat import json
 
 MANUFACTURER = 'Earthstorm Software'
 
+# Home Assistant gives colour temperatures in mireds (a million over kelvin): 6500 K to 2000 K
+MIN_MIREDS, MAX_MIREDS = 153, 500
+
 # The health figures Home Assistant shows as diagnostic sensors, where the platform has them: (key, name, config)
 SENSORS = (
     ('uptime_s', 'Uptime', {'device_class': 'duration', 'unit_of_measurement': 's',
@@ -50,3 +53,42 @@ def sensor(name, t, product, key):
             config.update(extra)
             return json.dumps(config)
     raise ValueError('unknown sensor')
+
+
+# A light's (base.lightmqtt)
+
+def light(name, t, product, modes):
+    return json.dumps({
+        'name': None,  # the entity takes the device's name
+        'unique_id': name + '_light',
+        'schema': 'json',
+        'command_topic': t['ha_set'],
+        'state_topic': t['ha_state'],
+        'availability_topic': t['status'],
+        'supported_color_modes': ['rgb', 'color_temp'],
+        'min_mireds': MIN_MIREDS,
+        'max_mireds': MAX_MIREDS,
+        'brightness': True,
+        'brightness_scale': 100,  # percent, as the device has it
+        'effect': True,
+        'effect_list': list(modes),
+        'device': device(name, product),
+    })
+
+
+def alerts(name, t, product):
+    """The switch that turns alerts on and off."""
+    return json.dumps({
+        'name': 'Alerts', 'unique_id': name + '_alerts', 'icon': 'mdi:alarm-light-outline',
+        'command_topic': t['alert_set'], 'payload_on': '{"Enabled": true}', 'payload_off': '{"Enabled": false}',
+        'state_topic': t['alert_state'], 'value_template': "{{ 'ON' if value_json.Enabled else 'OFF' }}",
+        'state_on': 'ON', 'state_off': 'OFF', 'availability_topic': t['status'], 'device': device(name, product),
+    })
+
+
+def alert(name, t, product):
+    """The button that starts an alert (when they're switched on)."""
+    return json.dumps({
+        'name': 'Alert', 'unique_id': name + '_alert', 'icon': 'mdi:alarm-light', 'command_topic': t['alert'],
+        'payload_press': '{}', 'availability_topic': t['status'], 'device': device(name, product),
+    })

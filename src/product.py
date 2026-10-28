@@ -176,7 +176,18 @@ def setup_held():
 
 def tasks(device):
     from button import Button
-    return [Button(device).run(), _cheerlights(device)]
+    from base.compat import asyncio
+    wake = asyncio.Event()
+    device.light.listeners.append(lambda light: _changed(light, wake))
+    return [Button(device).run(), _cheerlights(device, wake)]
+
+
+def _changed(light, wake):
+    # effects.py (and its tables) only stays while an animation needs it: about 6 KB of a Pico's heap
+    if not isinstance(LIGHT_MODES.get(light.mode), _Animation):
+        from base.compat import release
+        release('effects')
+    wake.set()  # CheerLights may be showing now
 
 
 def applied(device, changed):
@@ -187,9 +198,9 @@ def applied(device, changed):
         device.light._wake.set()
 
 
-async def _cheerlights(device):
+async def _cheerlights(device, wake):
     """Fetches the CheerLights colour while the light shows it: on going into the mode, then every
-    cheerlights_update_interval seconds."""
+    cheerlights_update_interval seconds. Otherwise it waits for a change to the light (wake)."""
     global _cheerlights_colour
     import time
     from base.compat import sleep_ms
@@ -207,14 +218,15 @@ async def _cheerlights(device):
                         Log.info(TAG, 'CheerLights: {}'.format(colour))
                         light.set(parameters={'Colour': colour})
             showing = True
+            await sleep_ms(1000)
         else:
             showing = False
-        await sleep_ms(1000)
+            wake.clear()
+            await wake.wait()
 
 
 async def _fetch(url):
     """The colour in a CheerLights feed (its latest entry's field2), or None."""
-    import sys
     from base.light import is_valid_colour
     try:
         import asynchttp
@@ -223,7 +235,8 @@ async def _fetch(url):
         Log.warn(TAG, 'CheerLights update failed: {!r}'.format(e))
         return None
     finally:
-        sys.modules.pop('asynchttp', None)  # only needed now and then
+        from base.compat import release
+        release('asynchttp')  # only needed now and then
     colour = payload.get('field2') if isinstance(payload, dict) else None
     if not is_valid_colour(colour):
         # Not a "latest entry" feed (or an empty one): keep what's showing rather than guess

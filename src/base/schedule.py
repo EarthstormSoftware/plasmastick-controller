@@ -13,12 +13,10 @@ other change, so a group follows them. Another product has a schedule if it says
 the latest event's action is done, so a power cut doesn't leave things wrong.
 
 The clock is the platform's: platform.local_time() gives (local seconds since 1970, or None until the clock is
-right). Settings: schedule.events, schedule.latitude and schedule.longitude.
+right). Settings: schedule.events, schedule.latitude and schedule.longitude. Running the events is
+base.scheduler's, loaded only while there are some.
 """
-from math import sin, cos, asin, acos, radians, degrees
-
-from base.compat import asyncio
-from base.log import Log
+from base.compat import asyncio, release
 from base.settings import Setting
 
 TAG = 'SCHEDULE'
@@ -82,100 +80,19 @@ def schedule_settings(modes):
     }}
 
 
-def weekday(days):
-    """0 (Monday) to 6 for the date days after 1970-01-01 (a Thursday)."""
-    return (days + 3) % 7
-
-
-def sun_times(days, lat, lon):
-    """(sunrise, sunset) on the UTC date days (from 1970) at lat, lon, as seconds since 1970; None for either if the
-    sun doesn't rise or set that day."""
-    n = days - 10957 - lon / 360  # days from 2000-01-01, at local solar noon
-    m = (357.5291 + 0.98560028 * n) % 360
-    c = 1.9148 * sin(radians(m)) + 0.02 * sin(radians(2 * m)) + 0.0003 * sin(radians(3 * m))
-    ecliptic = (m + c + 180 + 102.9372) % 360
-    transit = 2451545.0 + n + 0.0053 * sin(radians(m)) - 0.0069 * sin(radians(2 * ecliptic))
-    declination = asin(sin(radians(ecliptic)) * sin(radians(23.4397)))
-    cos_hour = (sin(radians(-0.833)) - sin(radians(lat)) * sin(declination)) / (cos(radians(lat)) * cos(declination))
-    if not -1 <= cos_hour <= 1:
-        return None, None  # polar day or night
-    hour = degrees(acos(cos_hour)) / 360
-
-    def unix(jd):
-        return int((jd - 2440587.5) * 86400 + 0.5)
-    return unix(transit - hour), unix(transit + hour)
-
-
-def event_minute(ev, local_days, offset, lat, lon):
-    """When ev happens on the local date local_days, as minutes after local midnight; None if it doesn't happen that
-    day (or there's no sun time). offset: local time minus UTC, in seconds."""
-    if weekday(local_days) not in ev['days']:
-        return None
-    at = ev['at']
-    if at not in SUN:
-        return int(at[:2]) * 60 + int(at[3:])
-    if lat is None or lon is None:
-        return None
-    sun = sun_times(local_days, lat, lon)[at == 'sunset']
-    if sun is None:
-        return None
-    minute = (sun + offset - local_days * 86400) // 60 + ev.get('offset', 0)
-    return minute if 0 <= minute < 1440 else None
-
-
-def due(events, since, now, offset, lat, lon):
-    """The events after local time since and up to now (local seconds since 1970), in time order. A day at most."""
-    found = []
-    for day in range(since // 86400, now // 86400 + 1):
-        for ev in events:
-            minute = event_minute(ev, day, offset, lat, lon)
-            if minute is not None and since < day * 86400 + minute * 60 <= now:
-                found.append((day * 86400 + minute * 60, ev))
-    found.sort(key=lambda f: f[0])
-    return [ev for _, ev in found]
-
-
-def latest(events, now, offset, lat, lon):
-    """The last event before local time now within the past day, or None: what the light should be doing now."""
-    past = due(events, now - 86400, now, offset, lat, lon)
-    return past[-1] if past else None
-
-
-def run_event(device, ev):
-    Log.info(TAG, '{} ({})'.format(ev['action'], ev['at']))
-    light = device.light
-    if light is None:
-        device.product.scheduled(device, ev['action'] == 'on')
-    elif ev['action'] == 'off':
-        light.set(on=False)
-    else:
-        light.set(on=True, mode=ev.get('mode'), brightness=ev.get('brightness'))
-
-
 async def run(device):
-    """Does the events as they come, once the clock is right; first catching up with the latest."""
-    settings, platform = device.settings, device.platform
-    last, caught_up = None, False
+    """Runs the schedule while it has events (base.scheduler), and only checks the clock while it has none."""
+    state = {'last': None, 'caught_up': False}
     while True:
-        now, offset = platform.local_time()
-        if now is not None:
-            # When the clocks go forward, the events in the hour skipped run; going back, those in the hour
-            # repeated run once
-            if last is None:
-                last = now
-            events = settings.get('schedule', 'events')
-            lat, lon = settings.get('schedule', 'latitude'), settings.get('schedule', 'longitude')
-            try:
-                if not caught_up:
-                    ev = latest(events, now, offset, lat, lon)
-                    if ev:
-                        Log.info(TAG, 'Catching up after the start')
-                        run_event(device, ev)
-                    caught_up = True
-                else:
-                    for ev in due(events, last, now, offset, lat, lon):
-                        run_event(device, ev)
-            except (KeyError, TypeError, ValueError) as e:  # an event edited by hand
-                Log.warn(TAG, 'Skipping an unusable event ({!r})'.format(e))
-            last = max(last, now)
+        if device.settings.get('schedule', 'events'):
+            from base import scheduler
+            await scheduler.run(device, state)
+            del scheduler
+            release('base.scheduler')
+        else:
+            # A start with no events is caught up already: events added later run from when they're added
+            now, _ = device.platform.local_time()
+            if now is not None:
+                state['caught_up'] = True
+                state['last'] = now if state['last'] is None else max(state['last'], now)
         await asyncio.sleep(CHECK_S)
