@@ -10,7 +10,7 @@ Two guards before every request: a POST that a browser sends from another site's
 can't use the device through the browser), and with a web password set, every request needs it (HTTP Basic auth,
 any username). It's sent unencrypted, so it keeps out other people on the network rather than a determined attacker.
 """
-from base.compat import asyncio, a2b_base64, beside
+from base.compat import asyncio, a2b_base64, beside, json
 from base.log import Log
 from base.microdot import Microdot, Response
 from base.passwords import check_password
@@ -49,6 +49,16 @@ def _file(path, content_type):
         response = Response.send_file(path, content_type=content_type)
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+
+async def _sections(view):
+    """A JSON object a section at a time: a Pico's fragmented heap may have no single block for the whole of it."""
+    yield '{'
+    first = True
+    for key, value in view.items():
+        yield ('' if first else ', ') + json.dumps(key) + ': ' + json.dumps(value)
+        first = False
+    yield '}'
 
 
 def create(device):
@@ -95,7 +105,7 @@ def create(device):
         # Which settings restart the device when changed, so the page's Save button can say so beforehand
         view['_restart'] = ['{}.{}'.format(section, key) for section, settings in device.settings.schema.items()
                             for key, setting in settings.items() if setting.restart]
-        return view
+        return Response(body=_sections(view), headers={'Content-Type': 'application/json'})
 
     @app.post('/api/config')
     async def set_config(request):
