@@ -182,7 +182,7 @@ def test_mqtt(dev, config, args):
         return
 
     broker = args.broker or mqtt['broker_address']
-    device_name = config.get('device', {}).get('device_name')
+    device_name = dev.info()['name']  # the name in use (config.json's device_name is only a fallback)
     base = mqtt.get('topic_base', '/home/device/{name}').replace('{name}', device_name)
     ha_prefix = mqtt.get('ha_prefix', 'homeassistant')
     topic = base + '/control'
@@ -237,7 +237,7 @@ def test_mqtt(dev, config, args):
         check('mqtt.status_online', status == 'online', f'status={status}')
         expected_info = dev.info()
         ok, info = wait_json('info', lambda p: p.get('version') == expected_info.get('version')
-                             and isinstance(p.get('uptime_s'), int) and p.get('ip') == expected_info['wifi']['ip'])
+                             and isinstance(p.get('uptime_s'), int) and p.get('ip') == expected_info['ip'])
         check('mqtt.info', ok and isinstance(info.get('mem_free'), int), f'info={info}')
         if ha:
             ok, discovery = wait_json('ha_config', lambda c: c.get('unique_id') == f'{device_name}_light')

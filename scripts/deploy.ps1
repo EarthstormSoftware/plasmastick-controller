@@ -220,7 +220,7 @@ Set-Content -Path $stampFile -Value $mpyCrossVersion -Encoding ascii
 $moduleNames = @(Get-ChildItem -Path $srcDir -Filter '*.py' -File | Where-Object { $_.Name -ne 'main.py' } | ForEach-Object { $_.BaseName })
 # A module removed from src/ must not be deployed from an old build.
 if (Test-Path $buildDeviceDir) {
-    Get-ChildItem -Path $buildDeviceDir -Filter '*.mpy' -File | Where-Object { $_.BaseName -notin $moduleNames } | Remove-Item -Force
+    Get-ChildItem -Path $buildDeviceDir -Filter '*.mpy' -File | Where-Object { $_.BaseName -notin ($moduleNames + 'otaboot') } | Remove-Item -Force
 }
 foreach ($name in $moduleNames) {
     Compress-ToMpy -Source (Join-Path $srcDir "$name.py") -Destination (Join-Path $buildDeviceDir "$name.mpy")
@@ -235,12 +235,37 @@ foreach ($file in @(Get-ChildItem -Path $wwwDir -File)) {
     $runtimeFiles[$file.FullName] = ":/www/$($file.Name)"
 }
 
+# App Base (src/base, a copy made by App Base's update-base.ps1) goes to /base, as it is in src/, but for what's
+# only for a Pi (pi.py, piweb.py, mqttclient.py) and otaboot, which goes to the root: like main.py it's only updated
+# over USB.
+$baseDir = Join-Path $srcDir 'base'
+$buildBaseDir = Join-Path $buildDir 'base'
+$baseSkip = @('pi.py', 'piweb.py', 'mqttclient.py', 'pico/otaboot.py')
+$baseModules = @(Get-ChildItem -Path $baseDir -Recurse -Filter '*.py' -File | Where-Object { $_.FullName -notmatch '__pycache__' } |
+    ForEach-Object { $_.FullName.Substring($baseDir.Length + 1).Replace('\', '/') } | Where-Object { $_ -notin $baseSkip })
+if (Test-Path $buildBaseDir) {
+    # A module removed from the base must not be deployed from an old build
+    $wanted = @($baseModules | ForEach-Object { $_ -replace '\.py$', '.mpy' })
+    Get-ChildItem -Path $buildBaseDir -Recurse -Filter '*.mpy' -File | Where-Object {
+        $_.FullName.Substring($buildBaseDir.Length + 1).Replace('\', '/') -notin $wanted } | Remove-Item -Force
+}
+foreach ($module in $baseModules) {
+    $mpy = $module -replace '\.py$', '.mpy'
+    $built = Join-Path $buildBaseDir $mpy
+    Compress-ToMpy -Source (Join-Path $baseDir $module) -Destination $built
+    $runtimeFiles[$built] = ":/base/$mpy"
+}
+foreach ($file in @(Get-ChildItem -Path (Join-Path $baseDir 'www') -File)) {
+    $runtimeFiles[$file.FullName] = ":/base/www/$($file.Name)"
+}
+$otabootMpy = Join-Path $buildDeviceDir 'otaboot.mpy'
+Compress-ToMpy -Source (Join-Path $baseDir 'pico/otaboot.py') -Destination $otabootMpy
+$runtimeFiles[$otabootMpy] = ':/otaboot.mpy'
+
 # Libraries live in /lib on the device (on MicroPython's default sys.path).
-$microdotMpy = Join-Path $buildLibDir 'microdot.mpy'
 $mqttAsMpy = Join-Path $buildLibDir 'mqtt_as/__init__.mpy'
-Compress-ToMpy -Source (Join-Path $srcDir 'lib/microdot.py') -Destination $microdotMpy
 Compress-ToMpy -Source (Join-Path $srcDir 'lib/mqtt_as/__init__.py') -Destination $mqttAsMpy
-$libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy'; $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
+$libFilesToDeploy = @{ $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
 $totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
 Write-Host "Compiled $($script:compiled) module(s), $($script:upToDate) up to date ($totalKb KB in all)"
 
@@ -291,6 +316,12 @@ foreach ($name in $moduleNames) {
     $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
 }
 $remoteFilesToRemove += ':/lib/microdot.mpy'
+# The firmware before App Base had these in the root: the base does them now
+foreach ($name in @('api', 'asyncdns', 'captivedns', 'clock', 'devicebutton', 'deviceconfig', 'deviceidentity',
+        'htmlutil', 'httpserver', 'ledstrip', 'log', 'mqttgroup', 'mqttha', 'mqttstate', 'ntp', 'ota', 'passwords',
+        'picoled', 'provisioning', 'schedule', 'settings', 'watchdog', 'wificrypto', 'wlan')) {
+    $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
+}
 
 # Remove files left by older deploys. Root copies of libraries would shadow /lib,
 # because the current directory comes first on sys.path. A raw /lib/microdot.py
@@ -318,7 +349,7 @@ if (-not $PreserveProvisioning) {
 
 # /update and /prev hold a Wi-Fi update's staged files and backups: a USB deploy
 # replaces everything, so a stale rollback must not undo it.
-$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www', ':/update', ':/prev')
+$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www', ':/base', ':/update', ':/prev')
 
 Write-Host 'Resolving mpremote command...'
 $MpremoteCommand = Resolve-MpremoteCommand
@@ -350,7 +381,9 @@ foreach ($remoteDir in $remoteDirsToRemove) {
 }
 
 Write-Host 'Copying firmware files...'
-Invoke-MpRemote -Args @('fs', 'mkdir', ':/www') -AllowFailure | Out-Null
+foreach ($dir in @(':/www', ':/base', ':/base/www', ':/base/pico')) {
+    Invoke-MpRemote -Args @('fs', 'mkdir', $dir) -AllowFailure | Out-Null
+}
 foreach ($localPath in $runtimeFiles.Keys) {
     Invoke-MpRemote -Args @('fs', 'cp', $localPath, $runtimeFiles[$localPath]) | Out-Null
 }

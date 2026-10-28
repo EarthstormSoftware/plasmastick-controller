@@ -24,15 +24,15 @@ PICO_VID = 0x2E8A
 
 # (name, regex). The first group, if any, is reported as the milestone's value.
 MILESTONES = [
-    ('boot', r'\[MAIN\] :: Plasma Stick starting'),
-    ('device_name', r'\[CFG\] :: Using device name: (\S+)'),
-    ('hostname', r'\[WLAN\] :: Hostname set to: (\S+)'),
-    ('wlan', r'\[WLAN\] :: Connected to .* with IP (\S+)'),
-    ('http', r'\[HTTP\] :: HTTP server listening on port (\d+)'),
-    ('mqtt', r'\[MAIN\] :: Subscribed to Control Topic'),
-    ('mqtt_disabled', r'\[MAIN\] :: MQTT is disabled'),
-    ('provisioning', r'\[MAIN\] :: WiFi provisioning required'),
-    ('setup_ap', r'\[PROV\] :: Provisioning server running'),
+    ('boot', r'\[PICO\] :: PlasmaStick \S+ starting'),
+    ('device_name', r'\[PICO\] :: Name: (\S+)'),
+    ('hostname', r'\[WLAN\] :: Host name: (\S+)'),
+    ('wlan', r'\[WLAN\] :: Connected to .* as ([0-9.]+),'),
+    ('http', r'\[DEVICE\] :: PlasmaStick \S+ on port (\d+)'),
+    ('mqtt', r'\[MQTT\] :: Connected to'),
+    ('mqtt_disabled', r'\[DEVICE\] :: MQTT is off'),
+    ('provisioning', r'\[PICO\] :: Setup mode:'),
+    ('setup_ap', r'\[SETUP\] :: Join '),
 ]
 
 PROBLEMS = [
@@ -42,7 +42,7 @@ PROBLEMS = [
     ('memory', r'MemoryError'),
 ]
 
-HEAP = r'\[MAIN\] :: Heap free: (\d+) bytes'
+HEAP = r'\[PICO\] :: Heap free: (\d+) bytes'
 
 
 def find_pico_port():

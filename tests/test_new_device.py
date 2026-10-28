@@ -29,16 +29,21 @@ def test_the_example_template_builds_a_config_with_overrides():
     assert template['device'] is not config['device']  # the template itself is left alone
 
 
-def test_the_built_config_passes_the_firmwares_checks(tmp_path, monkeypatch):
-    from api import DeviceAPI
-    from deviceconfig import DeviceConfig
-    from ledstrip import LedStrip
-    monkeypatch.chdir(tmp_path)
-    config = new_device.build_config(new_device.read_template(EXAMPLE), 'Kitchen', [])
-    api = DeviceAPI(DeviceConfig.loadConfigFromFile(), LedStrip(DeviceConfig.loadConfigFromFile()), pico_led=None)
-    device = {k: v for k, v in config['device'].items() if k != 'device_name'}
-    mqtt = {k: v for k, v in config['mqtt'].items() if k != 'user'}
-    assert api.save_config({'device': device, 'mqtt': mqtt}) == (True, None)
+def test_the_built_config_passes_the_firmwares_checks(tmp_path):
+    import product
+    from base import pico
+    from base.lightmqtt import LIGHT_MQTT_SETTINGS
+    from base.light import LIGHT_SETTINGS
+    from base.mqtt import MQTT_SETTINGS
+    from base.schedule import schedule_settings
+    from base.settings import BASE_SETTINGS, merge
+    known = merge(BASE_SETTINGS, MQTT_SETTINGS, LIGHT_SETTINGS, schedule_settings(('Colour',) + product.MODE_ORDER),
+                  LIGHT_MQTT_SETTINGS, pico.SETTINGS, product.SETTINGS)
+    config = product.Codec.load(new_device.build_config(new_device.read_template(EXAMPLE), 'Kitchen', []))
+    for section, values in config.items():
+        for key, value in values.items():
+            setting = known[section][key]
+            assert setting.check is None or setting.check(value) is None, (section, key, value)
 
 
 @pytest.mark.skipif(sys.platform != 'win32', reason='DPAPI is Windows only')

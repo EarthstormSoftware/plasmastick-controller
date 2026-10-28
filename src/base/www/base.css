@@ -1,0 +1,107 @@
+/* The Earthstorm devices' pages: a card with a header, tabs and panes. Colours: text is at least 4.5:1 on its
+   background, borders and the switch track 3:1. */
+:root{color-scheme:light dark;
+  --page:#667eea;--card:#fff;--text:#333;--text2:#4a4f5c;--muted:#6b7080;
+  --line:#e6e7ec;--border:#8c92a0;--field:#fff;--accent:#4a56c9;--on-accent:#fff;
+  --on:#2e7d32;--off:#8c92a0;--chip:#f1f3f9;--ok-bg:#e7f5e8;--ok:#1e6b23;--bad-bg:#fdecea;--bad:#a12622}
+@media (prefers-color-scheme:dark){:root{
+  --page:#14151d;--card:#22242f;--text:#e8e9ef;--text2:#c4c7d2;--muted:#9aa0b0;
+  --line:#33364a;--border:#6b7080;--field:#2b2e3b;--accent:#9aa8ff;--on-accent:#14151d;
+  --off:#6b7080;--chip:#2f3240;--ok-bg:#1f3a24;--ok:#8fd694;--bad-bg:#452523;--bad:#ff9e98}}
+*{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
+body{font-family:system-ui,sans-serif;background:var(--page);color:var(--text);min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
+.card{background:var(--card);border-radius:12px;width:100%;max-width:760px;overflow:hidden}
+header{padding:20px 20px 0;text-align:center}
+h1{font-size:21px;color:var(--text);margin-bottom:6px}
+.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:var(--chip);color:var(--text2)}
+.badge.on{background:var(--on);color:#fff}
+.health{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 2px}
+.chip{font-size:12px;padding:3px 9px;border-radius:10px;background:var(--chip);color:var(--text2)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.alert{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px;text-align:left}
+.noscript{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px}
+/* Tabs: a radio per tab drives which pane shows; hidden visually but focusable, so arrow keys and screen readers can
+   switch tabs. base.js marks the chosen one. */
+input[name=t]{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+nav{display:flex;border-bottom:2px solid var(--line);margin-top:12px}
+nav label{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;transition:.15s}
+nav label:hover{color:var(--text)}
+nav label.on{color:var(--accent);border-bottom-color:var(--accent)}
+nav label.focus{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
+.pane{display:none;padding:20px}
+.pane.on{display:block}
+/* Label and value pairs */
+.facts{display:grid;grid-template-columns:minmax(96px,max-content) 1fr;gap:6px 16px;font-size:13px;margin-bottom:8px}
+.facts dt{color:var(--muted)}
+.facts dd{color:var(--text);overflow-wrap:anywhere}
+.sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
+.sec:first-child{margin-top:0}
+.cols{columns:2 300px;column-gap:32px}
+.group{break-inside:avoid;padding-bottom:4px}
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
+.field{flex:1;display:flex;flex-direction:column;gap:3px}
+.field label{font-size:12px;color:var(--text2);font-weight:500}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-bottom:10px;cursor:pointer}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
+input[type=text],input[type=number],input[type=password],select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
+input:disabled{opacity:.7}
+[aria-invalid=true]{border-color:var(--bad)!important}
+input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=color]{width:100%;height:40px;border:1.5px solid var(--border);border-radius:6px;background:var(--field);padding:2px}
+.note{font-size:12px;color:var(--muted);margin-bottom:8px}
+.note.bad{color:var(--bad)}
+.msg{font-size:12px;color:var(--bad);min-height:16px;margin-top:4px}
+.msg.good{color:var(--ok)}
+.btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--on-accent)}
+.btn-full:disabled{opacity:.5;cursor:default}
+.btn-full.danger{background:var(--bad-bg);color:var(--bad);border:1.5px solid var(--bad)}
+.btn-full.quiet{background:var(--chip);color:var(--text2)}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.buttons .btn-full{margin-top:0}
+.buttons .btn-full.on{outline:2px solid var(--accent);outline-offset:2px}
+details{margin:4px 0 8px}
+summary{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;padding:4px 0;margin-bottom:6px}
+footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
+/* A light's controls (as PlasmaStick's): they keep a phone-like width; the settings use the whole card */
+#pc{max-width:540px;margin:0 auto}
+/* Power switch */
+.power{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.power .sec{margin:0}
+.switch{position:relative;width:58px;height:32px;padding:0;border:none;border-radius:16px;background:var(--off);cursor:pointer;transition:.15s;flex:none}
+.switch::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s}
+.switch[aria-checked=true]{background:var(--on)}
+.switch[aria-checked=true]::after{left:30px}
+/* Sliders with their value */
+.bright{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bright input[type=range]{flex:1;height:28px}
+.bright output{font-size:13px;color:var(--text2);min-width:40px;text-align:right}
+/* White: a warm-to-cool track for the colour temperature */
+.warmth{background:linear-gradient(to right,#ff890e,#ffb16e,#ffe4ce,#fffefa);border-radius:6px}
+/* Mode buttons, three to a row */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.modes button{padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
+.modes button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+/* A colour picker in a row with its label and buttons */
+.crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.crow label{font-size:13px;color:var(--text2);flex:1}
+.crow input[type=color]{width:44px;height:36px;flex:none}
+.crow input[type=text]{flex:1}
+.reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer}
+.reset:disabled{opacity:.5;cursor:default}
+.swatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);background:#fff}
+input[type=color]:disabled{opacity:.4;cursor:default}
+/* Schedule events: a card each, their fields wrapping on a phone */
+.event{border:1.5px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.event select,.event input[type=time],.event input[type=number]{width:auto}
+.event input[type=number]{width:72px}
+.event input[type=time]{padding:7px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
+.days{display:flex;gap:2px;flex-basis:100%}
+.days label{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--text2);min-width:26px}
+.event .remove{margin-left:auto}
+/* MQTT topics shown under the topic base */
+.topics div{overflow-wrap:anywhere;margin-bottom:2px}
+.topics code{font-size:12px;color:var(--text2)}

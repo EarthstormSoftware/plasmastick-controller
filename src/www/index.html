@@ -3,123 +3,19 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PlasmaStick</title>
-<!-- A light bulb glowing warm white; the script below recolours it to match the lights. -->
-<link rel="icon" id="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2a10 10 0 0 0-5.5 18.3V23h11v-2.7A10 10 0 0 0 16 2z' fill='%23ffb46b' stroke='%23333' stroke-width='1.5'/%3E%3Crect x='10.5' y='24' width='11' height='2.5' rx='1' fill='%238c92a0'/%3E%3Crect x='12' y='27.5' width='8' height='2.5' rx='1' fill='%238c92a0'/%3E%3C/svg%3E">
+<!-- A warm light bulb -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2a10 10 0 0 0-5.5 18.3V23h11v-2.7A10 10 0 0 0 16 2z' fill='%23ffb46b' stroke='%23333' stroke-width='1.5'/%3E%3Crect x='10.5' y='24' width='11' height='2.5' rx='1' fill='%238c92a0'/%3E%3Crect x='12' y='27.5' width='8' height='2.5' rx='1' fill='%238c92a0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/base.css">
 <style>
-/* Colours: text is at least 4.5:1 on its background, borders and the switch track 3:1. */
-:root{color-scheme:light dark;
-  --page:#667eea;--card:#fff;--text:#333;--text2:#4a4f5c;--muted:#6b7080;
-  --line:#e6e7ec;--border:#8c92a0;--field:#fff;--accent:#4a56c9;--on-accent:#fff;
-  --on:#2e7d32;--off:#8c92a0;--chip:#f1f3f9;--ok-bg:#e7f5e8;--ok:#1e6b23;--bad-bg:#fdecea;--bad:#a12622}
-@media (prefers-color-scheme:dark){:root{
-  --page:#14151d;--card:#22242f;--text:#e8e9ef;--text2:#c4c7d2;--muted:#9aa0b0;
-  --line:#33364a;--border:#6b7080;--field:#2b2e3b;--accent:#9aa8ff;--on-accent:#14151d;
-  --off:#6b7080;--chip:#2f3240;--ok-bg:#1f3a24;--ok:#8fd694;--bad-bg:#452523;--bad:#ff9e98}}
-*{margin:0;padding:0;box-sizing:border-box}
-[hidden]{display:none!important}
-body{font-family:system-ui,sans-serif;background:var(--page);color:var(--text);min-height:100vh;padding:16px;display:flex;justify-content:center;align-items:flex-start}
-.card{background:var(--card);border-radius:12px;width:100%;max-width:760px;overflow:hidden}
-header{padding:20px 20px 0;text-align:center}
-h1{font-size:21px;color:var(--text);margin-bottom:6px}
-.badge{display:inline-block;padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:2px;background:var(--chip);color:var(--text2)}
-.badge.on{background:var(--on);color:#fff}
-/* Health chips and problem banner */
-.health{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 2px}
-.chip{font-size:12px;padding:3px 9px;border-radius:10px;background:var(--chip);color:var(--text2)}
-.chip.ok{background:var(--ok-bg);color:var(--ok)}
-.chip.bad{background:var(--bad-bg);color:var(--bad)}
-.alert{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px;text-align:left}
-/* CSS-only tabs - radio inputs drive panel visibility. The radios are hidden
-   visually but stay focusable, so arrow keys and screen readers can switch tabs. */
-input[name=t]{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
-nav{display:flex;border-bottom:2px solid var(--line)}
-nav label{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;transition:.15s}
-nav label:hover{color:var(--text)}
-.pane{display:none;padding:20px}
-#tc:checked~nav label[for=tc],
-#td:checked~nav label[for=td],
-#tn:checked~nav label[for=tn],
-#tm:checked~nav label[for=tm],
-#ts:checked~nav label[for=ts]{color:var(--accent);border-bottom-color:var(--accent)}
-#tc:checked~#pc,#td:checked~#pd,#tn:checked~#pn,#tm:checked~#pm,#ts:checked~#ps{display:block}
-#tc:focus-visible~nav label[for=tc],
-#td:focus-visible~nav label[for=td],
-#tn:focus-visible~nav label[for=tn],
-#tm:focus-visible~nav label[for=tm],
-#ts:focus-visible~nav label[for=ts]{outline:2px solid var(--accent);outline-offset:-4px;border-radius:6px}
-/* Schedule events: a card each, their fields wrapping on a phone */
-.event{border:1.5px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.event select,.event input[type=time],.event input[type=number]{width:auto}
-.event input[type=number]{width:72px}
-.days{display:flex;gap:2px;flex-basis:100%}
-.days label{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--text2);min-width:26px}
-.event .remove{margin-left:auto}
-/* The controls keep a phone-like width; the settings use the whole card */
-#pc{max-width:540px;margin:0 auto}
-/* Mode buttons, three to a row */
-.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
-.modes button,.styles button{padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
-.modes button[aria-pressed=true],.styles button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
-.styles{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;flex:1}
-.crow label{font-size:13px;color:var(--text2);flex:1}
-.reset{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer}
-.reset:disabled{opacity:.5;cursor:default}
-.swatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);background:#fff}
-/* Power switch */
-.power{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.power .sec{margin:0}
-.switch{position:relative;width:58px;height:32px;padding:0;border:none;border-radius:16px;background:var(--off);cursor:pointer;transition:.15s}
-.switch::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s}
-.switch[aria-checked=true]{background:var(--on)}
-.switch[aria-checked=true]::after{left:30px}
-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.msg{font-size:12px;color:var(--bad);min-height:16px;margin-top:4px}
-.msg.good{color:var(--ok)}
-/* White: a warm-to-cool track for the colour temperature */
-.warmth{background:linear-gradient(to right,#ff890e,#ffb16e,#ffe4ce,#fffefa);border-radius:6px}
-/* Brightness slider */
-.bright{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.bright input[type=range]{flex:1;accent-color:var(--accent);height:28px}
-.bright output{font-size:13px;color:var(--text2);min-width:40px;text-align:right}
-.note{font-size:12px;color:var(--muted);margin-bottom:8px}
-/* Sections */
-.sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px}
-.sec:first-child{margin-top:0}
-/* Settings sections flow into two columns when there's room, one on a phone */
-.cols{columns:2 300px;column-gap:32px}
-.group{break-inside:avoid;padding-bottom:4px}
-/* Generic inputs: fields sit side by side when they fit, stacked when not */
-.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
-.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-bottom:10px;cursor:pointer}
-.check input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
-details{margin:4px 0 8px}
-summary{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;padding:4px 0;margin-bottom:6px}
-summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.buttons{margin-bottom:8px}
+.styles{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;flex:1;margin-bottom:12px}
+.styles button{padding:9px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer;font-size:13px;font-weight:700;color:var(--text2)}
+.styles button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
 /* With MQTT off there's nothing else to set */
 form:has(#mqtt_enabled:not(:checked)) .mqtt-more{display:none}
 form:has(#mqtt_enabled:checked) .mqtt-off{display:none}
-/* A bottle has no direction */
+/* Reversing only means something on a strip */
 form:has(#led_layout option[value=bottle]:checked) .strip-only{display:none}
-.noscript{margin:12px 20px 0;padding:10px 12px;border-radius:8px;background:var(--bad-bg);color:var(--bad);font-size:13px}
-.field{flex:1;display:flex;flex-direction:column;gap:3px}
-.field label{font-size:12px;color:var(--text2);font-weight:500}
-input[type=text],input[type=number],input[type=password],input[type=url],select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--field);color:var(--text)}
-input:disabled{opacity:.7}
-[aria-invalid=true]{border-color:var(--bad)!important}
-input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input[type=url]:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-input[type=range]:focus,input[type=color]:focus{outline:none}
-input[type=range]:focus-visible,input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
-input[type=color]:disabled{opacity:.4;cursor:default}
-input[type=color]{width:44px;height:36px;padding:2px;border:1.5px solid var(--border);border-radius:6px;background:var(--field);cursor:pointer}
-.crow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.crow input[type=text]{flex:1}
-/* Buttons */
-.btn-full:disabled{opacity:.5;cursor:default}
-.btn-full.danger{background:var(--bad-bg);color:var(--bad);border:1.5px solid var(--bad)}
-.btn-full{display:block;width:100%;margin-top:10px;padding:11px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--on-accent)}
-.topics div{overflow-wrap:anywhere;margin-bottom:2px}
-.topics code{font-size:12px;color:var(--text2)}
-footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 </style>
 </head>
 <body>
@@ -132,24 +28,26 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
 <div class="alert" id="alert" role="alert" hidden></div>
 <noscript><p class="noscript">This page needs JavaScript. Turn it on for this site, then reload.</p></noscript>
 
-<input type="radio" name="t" id="tc" aria-label="Control tab" checked>
-<input type="radio" name="t" id="td" aria-label="Device tab">
-<input type="radio" name="t" id="tn" aria-label="Network tab">
-<input type="radio" name="t" id="tm" aria-label="MQTT tab">
-<input type="radio" name="t" id="ts" aria-label="Schedule tab">
+<input type="radio" name="t" id="tc" data-pane="pc" aria-label="Control tab" checked>
+<input type="radio" name="t" id="td" data-pane="pd" aria-label="Device tab">
+<input type="radio" name="t" id="tn" data-pane="pn" aria-label="Network tab">
+<input type="radio" name="t" id="tm" data-pane="pm" aria-label="MQTT tab">
+<input type="radio" name="t" id="ts" data-pane="ps" aria-label="Schedule tab">
+<input type="radio" name="t" id="ta" data-pane="pa" aria-label="Alert tab">
 <nav>
   <label for="tc">Control</label>
   <label for="td">Device</label>
   <label for="tn">Network</label>
   <label for="tm">MQTT</label>
   <label for="ts">Schedule</label>
+  <label for="ta">Alert</label>
 </nav>
 
 <!-- CONTROL PANEL -->
 <div class="pane" id="pc">
   <div class="power">
     <div class="sec">Power</div>
-    <button type="button" class="switch" id="power" role="switch" aria-checked="false" aria-label="Lights on"></button>
+    <button type="button" class="switch" id="power" role="switch" aria-checked="false" aria-label="Light on"></button>
   </div>
 
   <div class="sec"><label for="brightness">Brightness</label></div>
@@ -159,14 +57,13 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
   </div>
 
   <div class="sec">Mode</div>
-  <!-- Filled in from the device's list of modes (/api/info) -->
+  <!-- Filled in from the light's modes (/api/info) -->
   <div class="modes" id="modes" role="group" aria-label="Mode"></div>
+  <p class="note" id="mode_help" hidden></p>
   <!-- Christmas only -->
-  <div class="crow" id="style_row" hidden>
-    <div class="styles" role="group" aria-label="Christmas style">
-      <button type="button" data-style="Twinkle" aria-pressed="false">Twinkle</button>
-      <button type="button" data-style="Fade" aria-pressed="false">Fade</button>
-    </div>
+  <div class="styles" id="style_row" role="group" aria-label="Christmas style" hidden>
+    <button type="button" data-style="Twinkle" aria-pressed="false">Twinkle</button>
+    <button type="button" data-style="Fade" aria-pressed="false">Fade</button>
   </div>
   <!-- Animations only -->
   <div class="bright" id="speed_row" hidden>
@@ -195,19 +92,13 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
   <form class="settings">
     <div class="cols">
     <div class="group">
-      <div class="sec">Identity</div>
-      <div class="frow">
-        <div class="field"><label for="device_name">Device Name</label>
-          <input type="text" name="device.device_name" id="device_name" maxlength="32">
-        </div>
-      </div>
       <div class="sec">LED Hardware</div>
       <div class="frow">
         <div class="field"><label for="device_led_count">LED Count</label>
           <input type="number" required name="device.device_led_count" id="device_led_count" min="1" max="300">
         </div>
-        <div class="field"><label for="device_led_rgbw">Type</label>
-          <select name="device.device_led_rgbw" id="device_led_rgbw" data-t="bool">
+        <div class="field"><label for="device_led_rgbw">LED Type</label>
+          <select name="device.device_led_rgbw" id="device_led_rgbw">
             <option value="false">RGB</option>
             <option value="true">RGBW</option>
           </select>
@@ -237,6 +128,9 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         </div>
       </div>
       <div class="frow">
+        <div class="field"><label for="default_colour">Colour</label>
+          <input type="color" name="device.default_colour" id="default_colour" value="#ffb46b">
+        </div>
         <div class="field"><label for="christmas_style">Christmas Style</label>
           <select name="device.christmas_style" id="christmas_style" aria-describedby="style_help">
             <option value="Twinkle">Twinkle</option>
@@ -249,100 +143,167 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         <div class="field"><label for="effect_speed">Animation Speed (1-10)</label>
           <input type="number" required name="device.effect_speed" id="effect_speed" min="1" max="10" aria-describedby="speed_help">
         </div>
-      </div>
-      <p class="note" id="speed_help">For animations started without a speed of their own, as from Home Assistant. 5 is the usual pace.</p>
-      <div class="frow">
         <div class="field"><label for="transition_ms">Fade Time (ms)</label>
           <input type="number" required name="device.transition_ms" id="transition_ms" min="0" max="10000" step="100" aria-describedby="fade_help">
         </div>
       </div>
-      <p class="note" id="fade_help">Turning on and off, and changing brightness or colour, fade over this time. 0: instant. Home Assistant can ask for its own.</p>
-      <div class="frow">
-        <div class="field"><label for="default_colour">Colour</label>
-          <div class="crow">
-            <input type="color" name="device.mode_parameters.Colour" id="default_colour" value="#ffb46b">
-            <span class="note" style="margin:0" id="default_colour_text"></span>
-          </div>
-        </div>
-      </div>
+      <p class="note" id="speed_help">The speed is for animations started without one of their own, as from Home Assistant (5 is the usual pace).</p>
+      <p class="note" id="fade_help">Turning on and off, and changing brightness or colour, fade over the fade time. 0: instant. Home Assistant can ask for its own.</p>
     </div>
     <div class="group">
       <div class="sec">CheerLights</div>
       <div class="frow">
         <div class="field"><label for="cheerlights_url">API URL</label>
-          <input type="url" name="device.cheerlights_url" id="cheerlights_url">
+          <input type="url" name="device.cheerlights_url" id="cheerlights_url" maxlength="200" spellcheck="false" autocapitalize="off">
         </div>
       </div>
       <div class="frow">
         <div class="field"><label for="cheerlights_update_interval">Update Interval (s)</label>
-          <input type="number" required name="device.cheerlights_update_interval" id="cheerlights_update_interval" min="10">
+          <input type="number" required name="device.cheerlights_update_interval" id="cheerlights_update_interval" min="10" max="86400">
         </div>
       </div>
+      <p class="note">The colour the world has chosen (cheerlights.com), fetched this often while CheerLights mode shows.</p>
+    </div>
+    <div class="group">
+      <div class="sec">Clock</div>
+      <div class="frow">
+        <div class="field"><label for="utc_offset_min">Time Zone</label>
+          <!-- Filled in by the script: UTC-12:00 to UTC+14:00 -->
+          <select name="device.utc_offset_min" id="utc_offset_min" data-number></select>
+        </div>
+        <div class="field"><label for="dst">Summer Time</label>
+          <select name="device.dst" id="dst">
+            <option value="none">None</option>
+            <option value="eu">Europe</option>
+            <option value="us">North America</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="ntp_server">Time Server (NTP)</label>
+          <input type="text" name="device.ntp_server" id="ntp_server" maxlength="64" placeholder="none: don't set the clock" aria-describedby="ntp_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="ntp_help">The time zone is the standard (winter) offset; summer time adds an hour. Europe: last
+        Sunday of March to last Sunday of October. North America: second Sunday of March to first Sunday of November.</p>
+    </div>
+    <div class="group">
+      <div class="sec">Web Access</div>
+      <div class="frow">
+        <div class="field"><label for="web_password">Password</label>
+          <input type="password" name="web.password" id="web_password" maxlength="64" placeholder="leave blank to keep" autocomplete="new-password" aria-describedby="web_password_help">
+        </div>
+      </div>
+      <p class="note" data-password-set="web.password" hidden>A password is set.
+        <button type="button" class="reset" data-clear-password="web.password">Remove the password</button></p>
+      <p class="note" id="web_password_help">With a password set, the browser asks for it (any username), and updates
+        over Wi-Fi can be sent. It's sent unencrypted, so it keeps out other people on your network rather than a
+        determined attacker. Setup mode removes a forgotten one.</p>
     </div>
     <div class="group">
       <div class="sec">Diagnostics</div>
       <div class="frow">
         <div class="field"><label for="log_level">Log Level (USB serial log)</label>
-          <select name="device.log_level" id="log_level" data-t="int">
+          <select name="device.log_level" id="log_level" data-number>
             <option value="0">Warnings and errors</option>
             <option value="1">Info</option>
             <option value="2">Debug</option>
           </select>
         </div>
       </div>
-      <label class="check"><input type="checkbox" name="device.watchdog" id="watchdog"> Restart automatically if the firmware stops responding</label>
+      <label class="check"><input type="checkbox" name="device.watchdog" id="watchdog"> Restart by itself if the firmware stops responding</label>
     </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
   </form>
 
-  <div class="sec">Reset</div>
-  <p class="note">Both keep the LED count and type. Reset settings keeps the Wi-Fi network too; factory reset forgets it, and the device starts its PlasmaStick-SETUP hotspot: join it, then open http://192.168.4.1 to set it up again.</p>
-  <button type="button" class="btn-full danger reset-btn" data-confirm="Reset all settings to their defaults? The device keeps its Wi-Fi network and restarts.">Reset settings</button>
-  <button type="button" class="btn-full danger reset-btn" data-confirm="Factory reset? This also forgets the Wi-Fi network: you'll need to join the PlasmaStick-SETUP hotspot and open http://192.168.4.1 to set the device up again." data-wifi="true">Factory reset</button>
+  <div data-name-editable hidden>
+    <div class="sec">Name</div>
+    <div class="frow">
+      <div class="field"><label for="device_name">Device Name</label>
+        <input type="text" id="device_name" maxlength="32" aria-describedby="name_help" spellcheck="false" autocapitalize="off">
+      </div>
+    </div>
+    <p class="note" id="name_help">Also its network name (<i>name</i>.local) and MQTT client id. Home Assistant names
+      the light after it. Letters, digits, - and _; used from the next start.</p>
+    <button type="button" class="reset" id="rename_save">Save</button>
+    <p class="msg" id="rename_msg" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="sec">Updates</div>
+  <p class="note"><code>deploy.ps1 -WiFi &lt;name&gt;</code> sends a new version over Wi-Fi (with a web password set):
+    the device tries it, and goes back to this one if it doesn't start properly.</p>
+
+  <div class="sec">Restart and Reset</div>
+  <p class="note">Reset puts every setting on these pages back to its default (the web password too), but keeps the
+    Wi-Fi network and the LED count and type. A factory reset also forgets the name and Wi-Fi, and starts setup mode.</p>
+  <div class="buttons">
+    <button type="button" class="btn-full quiet" data-restart data-msg="reset_msg">Restart</button>
+    <button type="button" class="btn-full danger" data-reset data-msg="reset_msg" data-confirm="Reset all settings to their defaults? The device keeps its Wi-Fi network and restarts.">Reset settings</button>
+    <button type="button" class="btn-full danger" data-factory-reset data-os-setup hidden data-msg="reset_msg" data-confirm="Factory reset? The device forgets its settings, name and Wi-Fi, and starts its PlasmaStick-SETUP hotspot to be set up again.">Factory reset</button>
+  </div>
   <p class="msg" id="reset_msg" role="status" aria-live="polite"></p>
 </div>
 
 <!-- NETWORK PANEL -->
 <div class="pane" id="pn">
+  <div data-os-setup hidden>
+    <div class="sec">Wi-Fi Network</div>
+    <div data-wifi-change hidden>
+      <p class="note">Connected to <b id="wifi_current">&hellip;</b>. A new network is used after a restart, on trial:
+        if it can't connect within 5 minutes, the device goes back to this one.</p>
+      <div class="frow">
+        <div class="field"><label for="wifi_network">Network</label>
+          <select id="wifi_network"><option value="">Scan to list them</option></select>
+        </div>
+        <div class="field"><label for="wifi_network_other">Or type its name</label>
+          <input type="text" id="wifi_network_other" maxlength="32" placeholder="a hidden network" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="wifi_password">Password</label>
+          <input type="password" id="wifi_password" maxlength="64" placeholder="empty for an open network" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="buttons">
+        <button type="button" class="btn-full quiet" id="wifi_scan">Scan</button>
+        <button type="button" class="btn-full" id="wifi_change">Change Wi-Fi</button>
+      </div>
+      <p class="msg" id="wifi_change_msg" role="status" aria-live="polite"></p>
+    </div>
+    <p class="note">Setup mode is the other way, with no network to reach this page: the device's PlasmaStick-SETUP
+      hotspot and a page at http://192.168.4.1. Holding the button while powering on starts it (or BOOTSEL for 5 s
+      while it runs), as does the fallback below.</p>
+    <div class="buttons">
+      <button type="button" class="btn-full quiet" data-setup-mode data-msg="wifi_msg" data-confirm="Restart into setup mode? This page goes away until the device is back.">Setup mode…</button>
+    </div>
+    <div class="sec">Wi-Fi Fallback</div>
+    <label class="check"><input type="checkbox" id="wifi_fallback_enabled"> If Wi-Fi doesn't connect, go into setup mode by itself</label>
+    <div class="frow">
+      <div class="field"><label for="wifi_fallback_after">After (minutes without a network, up to 1440: a day)</label>
+        <input type="number" id="wifi_fallback_after" min="1" max="1440" step="1">
+      </div>
+      <div class="field"><label for="wifi_fallback_for">For (minutes, then try Wi-Fi again)</label>
+        <input type="number" id="wifi_fallback_for" min="5" max="120" step="1">
+      </div>
+    </div>
+    <button type="button" class="reset" id="wifi_save">Save</button>
+    <p class="msg" id="wifi_msg" role="status" aria-live="polite"></p>
+  </div>
+
   <form class="settings">
-    <div class="cols">
-    <div class="group">
-      <div class="sec">Wi-Fi</div>
-      <div class="frow">
-        <div class="field"><label for="ssid">Network (SSID)</label>
-          <input type="text" id="ssid" aria-describedby="wifi_help" disabled>
-        </div>
+    <div class="sec">Connecting</div>
+    <div class="frow">
+      <div class="field"><label for="connect_timeout">Timeout (s)</label>
+        <input type="number" required name="wlan.connect_timeout" id="connect_timeout" min="5" max="300">
       </div>
-      <p class="note" id="wifi_help">To change the Wi-Fi network or its password, hold the button while powering on: the device starts its PlasmaStick-SETUP hotspot. Join it, then open http://192.168.4.1.</p>
-      <details>
-        <summary>Connection timing</summary>
-        <div class="frow">
-          <div class="field"><label for="connect_timeout">Connect Timeout (s)</label>
-            <input type="number" required name="wlan.connect_timeout" id="connect_timeout" min="5">
-          </div>
-          <div class="field"><label for="reconnect_wait">Reconnect Wait (s)</label>
-            <input type="number" required name="wlan.reconnect_wait" id="reconnect_wait" min="5">
-          </div>
-        </div>
-        <div class="frow">
-          <div class="field"><label for="max_retries">Max Retries (0 = unlimited)</label>
-            <input type="number" required name="wlan.max_retries" id="max_retries" min="0">
-          </div>
-        </div>
-      </details>
-    </div>
-    <div class="group">
-      <div class="sec">Web Access</div>
-      <div class="frow">
-        <div class="field"><label for="web_password">Password (<span id="web_password_state">none set</span>)</label>
-          <input type="password" name="web.password" id="web_password" aria-describedby="web_password_help" minlength="4" placeholder="leave blank to keep" autocomplete="new-password">
-        </div>
+      <div class="field"><label for="reconnect_wait">Wait Between (s)</label>
+        <input type="number" required name="wlan.reconnect_wait" id="reconnect_wait" min="5" max="3600">
       </div>
-      <label class="check"><input type="checkbox" name="web.clear_password" id="web_password_clear"> Remove the password</label>
-      <p class="note" id="web_password_help">With a password set, the browser asks for it (any username). Forgotten it? Hold the button while powering on and complete setup, which removes it.</p>
-    </div>
+      <div class="field"><label for="max_retries">Attempts (0: no limit)</label>
+        <input type="number" required name="wlan.max_retries" id="max_retries" min="0" max="1000">
+      </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
     <p class="msg" role="status" aria-live="polite"></p>
@@ -359,26 +320,25 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
       <div class="sec">Broker</div>
       <div class="frow">
         <div class="field"><label for="broker_address">Address</label>
-          <input type="text" name="mqtt.broker_address" id="broker_address">
+          <input type="text" name="mqtt.broker_address" id="broker_address" maxlength="100" placeholder="host or host:port" spellcheck="false" autocapitalize="off">
         </div>
       </div>
       <div class="frow">
         <div class="field"><label for="mqtt_user">Username</label>
-          <input type="text" name="mqtt.user" id="mqtt_user">
+          <input type="text" name="mqtt.user" id="mqtt_user" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off">
         </div>
         <div class="field"><label for="mqtt_password">Password</label>
-          <input type="password" name="mqtt.password" id="mqtt_password" placeholder="leave blank to keep">
+          <input type="password" name="mqtt.password" id="mqtt_password" maxlength="64" placeholder="leave blank to keep" autocomplete="new-password">
         </div>
       </div>
-      <details>
-        <summary>Session options</summary>
-        <div class="frow">
-          <div class="field"><label for="queue_len">Queue Length</label>
-            <input type="number" required name="mqtt.queue_len" id="queue_len" min="1">
-          </div>
+      <p class="note" data-password-set="mqtt.password" hidden>A password is set.
+        <button type="button" class="reset" data-clear-password="mqtt.password">Remove the password</button></p>
+      <div class="frow">
+        <div class="field"><label for="queue_len">Queue Length</label>
+          <input type="number" required name="mqtt.queue_len" id="queue_len" min="1" max="20">
         </div>
-        <label class="check"><input type="checkbox" name="mqtt.clean" id="clean"> Clean session</label>
-      </details>
+      </div>
+      <label class="check"><input type="checkbox" name="mqtt.clean" id="clean"> Clean session</label>
     </div>
     <div class="group">
       <div class="sec">Topics</div>
@@ -398,17 +358,20 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
         </div>
       </div>
       <label class="check"><input type="checkbox" name="mqtt.group_brightness" id="group_brightness"> Follow the group's brightness</label>
-      <p class="note" id="group_help">Devices with the same group name follow each other: turn one on, or change its mode or colour, and the rest do the same. Letters, digits, - and _.</p>
+      <p class="note" id="group_help">Devices with the same group name follow each other: turn one on, or change its
+        mode or colour, and the rest do the same (the Unicorn HAT too). A mode another device doesn't have is ignored
+        by it. Letters, digits, - and _.</p>
     </div>
     <div class="group">
       <div class="sec">Home Assistant</div>
-      <label class="check"><input type="checkbox" name="mqtt.ha_discovery" id="ha_discovery"> Announce the light to Home Assistant</label>
+      <label class="check"><input type="checkbox" name="mqtt.ha_discovery" id="ha_discovery"> Announce the lights to Home Assistant</label>
       <div class="frow">
         <div class="field"><label for="ha_prefix">Discovery Prefix</label>
           <input type="text" required name="mqtt.ha_prefix" id="ha_prefix" maxlength="100" placeholder="homeassistant" aria-describedby="ha_help" spellcheck="false" autocapitalize="off">
         </div>
       </div>
-      <p class="note" id="ha_help">Home Assistant adds the light automatically (MQTT discovery). Turning this off removes it again. Only change the prefix if Home Assistant's has been changed.</p>
+      <p class="note" id="ha_help">Home Assistant adds the light automatically (MQTT discovery), with an Alert button and
+        an Alerts switch. Turning this off removes it again. Only change the prefix if Home Assistant's has been changed.</p>
     </div>
     </div>
     <button type="submit" class="btn-full save" disabled>Save</button>
@@ -422,34 +385,17 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
     <div class="cols">
     <div class="group">
       <div class="sec">Clock</div>
-      <div class="frow">
-        <div class="field"><label for="utc_offset_min">Time Zone</label>
-          <!-- Filled in by the script: UTC-12:00 to UTC+14:00 -->
-          <select name="device.utc_offset_min" id="utc_offset_min" data-t="int"></select>
-        </div>
-        <div class="field"><label for="dst">Summer Time</label>
-          <select name="device.dst" id="dst">
-            <option value="none">None</option>
-            <option value="eu">Europe</option>
-            <option value="us">North America</option>
-          </select>
-        </div>
-      </div>
-      <div class="frow">
-        <div class="field"><label for="ntp_server">Time Server (NTP)</label>
-          <input type="text" name="device.ntp_server" id="ntp_server" maxlength="64" placeholder="none: don't set the clock" aria-describedby="ntp_help" spellcheck="false" autocapitalize="off">
-        </div>
-      </div>
-      <p class="note" id="ntp_help">The time zone is the standard (winter) offset; summer time adds an hour. Europe: last Sunday of March to last Sunday of October. North America: second Sunday of March to first Sunday of November.</p>
+      <p class="note" id="clock_note"></p>
+      <p class="note">The time zone, summer time and time server are on the Device tab.</p>
     </div>
     <div class="group">
       <div class="sec">Location</div>
       <div class="frow">
         <div class="field"><label for="latitude">Latitude</label>
-          <input type="number" name="device.latitude" id="latitude" min="-90" max="90" step="any" placeholder="e.g. 51.5">
+          <input type="number" name="schedule.latitude" id="latitude" min="-90" max="90" step="any" placeholder="e.g. 51.5">
         </div>
         <div class="field"><label for="longitude">Longitude</label>
-          <input type="number" name="device.longitude" id="longitude" min="-180" max="180" step="any" placeholder="e.g. -0.13">
+          <input type="number" name="schedule.longitude" id="longitude" min="-180" max="180" step="any" placeholder="e.g. -0.13">
         </div>
       </div>
       <p class="note" id="sun_note">For sunrise and sunset events. East and north are positive.</p>
@@ -464,611 +410,138 @@ footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 0 14px}
   </form>
 </div>
 
-<footer><span id="footer_name"></span> &bull; PlasmaStick <span id="footer_info"></span></footer>
+<!-- ALERT PANEL -->
+<div class="pane" id="pa">
+  <div class="power">
+    <div class="sec">Alerts</div>
+    <button type="button" class="switch" id="alerts" role="switch" aria-checked="false" aria-label="Alerts on"></button>
+  </div>
+  <p class="note">With alerts on, an alert interrupts whatever the lights are doing, even when they're off: they flash,
+    then carry on as they were. Alerts come from the topic watched below, Home Assistant's Alert button, MQTT
+    (<code>&lt;base&gt;/alert</code>) or the API (<code>POST /api/alert</code>).</p>
+  <div class="buttons">
+    <button type="button" class="btn-full quiet" id="alert_test">Test</button>
+    <button type="button" class="btn-full quiet" id="alert_stop">Stop</button>
+  </div>
+  <p class="msg" id="alert_msg" role="status" aria-live="polite"></p>
+
+  <form class="settings">
+    <div class="cols">
+    <div class="group">
+      <div class="sec">The Alert</div>
+      <div class="frow">
+        <div class="field"><label for="alert_colour">Colour</label>
+          <input type="color" name="alert.colour" id="alert_colour">
+        </div>
+        <div class="field"><label for="alert_seconds">For (s)</label>
+          <input type="number" required name="alert.seconds" id="alert_seconds" min="1" max="3600">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="alert_on">On (ms)</label>
+          <input type="number" required name="alert.on_ms" id="alert_on" min="50" max="10000" step="50">
+        </div>
+        <div class="field"><label for="alert_off">Off (ms)</label>
+          <input type="number" required name="alert.off_ms" id="alert_off" min="0" max="10000" step="50" aria-describedby="flash_help">
+        </div>
+        <div class="field"><label for="alert_brightness">Brightness (%)</label>
+          <input type="number" required name="alert.brightness" id="alert_brightness" min="1" max="100">
+        </div>
+      </div>
+      <p class="note" id="flash_help">Each flash is on, then off, for these times (off 0: steady).</p>
+    </div>
+    <div class="group">
+      <div class="sec">Watch</div>
+      <div class="frow">
+        <div class="field"><label for="alert_topic">MQTT Topic</label>
+          <input type="text" name="mqtt.alert_topic" id="alert_topic" maxlength="200" placeholder="none" aria-describedby="watch_help" spellcheck="false" autocapitalize="off">
+        </div>
+      </div>
+      <p class="note" id="watch_help">Another device's topic, such as a Pico PIR's <code>/home/device/pir/state</code>:
+        an alert starts when it says something has happened (motion true, ON, true, or any other message), once until
+        it clears. Needs MQTT.</p>
+    </div>
+    </div>
+    <button type="submit" class="btn-full save" disabled>Save</button>
+    <p class="msg" role="status" aria-live="polite"></p>
+  </form>
 </div>
+
+<footer id="footer"></footer>
+</div>
+<script src="/base.js"></script>
 <script>
-// Values are set with .value / .textContent, never as HTML, so names and URLs
-// can't inject markup. Save stays disabled until the settings have loaded, so
-// a form can't post empty fields over the real config.
-function el(id) { return document.getElementById(id); }
-var info = null;
-var defaultColour = null;  // from /api/config
-var colourSending = false, pendingColour = null;
-var brightnessSending = false, pendingBrightness = null;
-var expected = {};  // key: {value, until}: what was just asked for
+var el = Base.el;
+var ANIMATIONS = ['Rainbows', 'Fire', 'Ocean', 'Christmas'];
+var light = Base.light({ speed: ANIMATIONS, colour: ['Colour'] });
+Base.schedule();
 
-function expect(key, value) { expected[key] = { value: value, until: Date.now() + 3000 }; }
-// The device's value, or what was just asked for if the device hasn't caught up yet.
-function shown(i, key) {
-  var e = expected[key];
-  if (e) {
-    if (i[key] === e.value || Date.now() > e.until) delete expected[key];
-    else return e.value;
-  }
-  return i[key];
-}
-
-// The colour picker and Default button stay in place, enabled in Colour mode only.
-function showMode(mode) {
-  modeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.value === mode ? 'true' : 'false'); });
-  el('style_row').hidden = mode !== 'Christmas';
-  el('speed_row').hidden = mode === 'Colour' || mode === 'CheerLights';
-  var speed = info && shown(info, 'speed');
-  if (speed && document.activeElement !== el('speed')) {
-    el('speed').value = speed;
-    el('speed_text').textContent = speed;
-  }
-  var style = info && shown(info, 'style');
-  styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
-  el('colour').disabled = el('kelvin').disabled = mode !== 'Colour';
-  var kelvin = info && info.kelvin;
-  if (document.activeElement !== el('kelvin')) {
-    if (kelvin) el('kelvin').value = kelvin;
-    // A colour picked any other way isn't a white temperature: no figure for it.
-    el('kelvin_text').textContent = kelvin ? kelvin + ' K' : '\u2014';
-  }
-  el('colour_text').textContent = mode === 'Colour' ? 'Pick a colour'
-    : mode === 'CheerLights' && info && info.colour ? 'CheerLights: ' + info.colour : 'Colour mode only';
-  showDefault(mode);
-}
-var modeButtons = [];
-var styleButtons = Array.prototype.slice.call(document.querySelectorAll('.styles button'));
-styleButtons.forEach(function (b) {
-  b.addEventListener('click', function () {
-    expect('mode', 'Christmas');
-    expect('style', b.dataset.style);
-    showMode('Christmas');
-    act('/api/mode', { mode: 'Christmas', parameters: { Style: b.dataset.style, Speed: Number(el('speed').value) } });
-  });
+// Time zones, as offsets in minutes: every hour, and the half and quarter hours in use
+[-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240, 270,
+  300, 330, 345, 360, 390, 420, 480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840].forEach(function (m) {
+  var a = Math.abs(m);
+  el('utc_offset_min').appendChild(Base.mk('option', {
+    value: m, text: 'UTC' + (m < 0 ? '−' : '+') + ('0' + Math.floor(a / 60)).slice(-2) + ':' + ('0' + a % 60).slice(-2)
+  }));
 });
-var restarting = false;  // after a save that restarts the device
 
-// The mode buttons and the Default Mode list come from the device's own list,
-// so a new mode needs no change here.
-function buildModes(modes) {
-  modes.forEach(function (m) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.value = b.textContent = m;
-    b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', function () {
-      expect('mode', m);
-      showMode(m);
-      var body = { mode: m };
-      if (m === 'Colour') body.parameters = { Colour: el('colour').value };
-      act('/api/mode', body);
-    });
-    el('modes').appendChild(b);
-    modeButtons.push(b);
-    var o = document.createElement('option');
-    o.value = o.textContent = m;
-    el('default_mode').appendChild(o);
-  });
-}
-
-function post(path, body) {
-  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
-    .then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) {
-        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-        return j;
-      });
-    });
-}
-
-function say(text) { el('msg').textContent = text || ''; }
-
-function duration(s) {
-  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-  return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + m + 'm' : m + 'm';
-}
-
-function chip(text, cls) {
-  var c = document.createElement('span');
-  c.className = 'chip' + (cls ? ' ' + cls : '');
-  c.textContent = text;
-  return c;
-}
-
-// The tab's icon glows in the lights' colour: the colour itself, or the
-// animation's colours as a gradient, or grey when they're off. Redrawn only
-// when that changes, so the tab doesn't flicker on every refresh.
-var ICON_GRADIENTS = {
-  Rainbows: ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'],
-  Fire: ['#ffd23c', '#ff8000', '#c81000'],
-  Ocean: ['#9ff0ff', '#00a0a0', '#0030a0'],
-  Christmas: ['#ff0800', '#00be14', '#ff820a', '#0a28ff']
+// What each mode does, under the buttons
+var HELP = {
+  'CheerLights': 'The colour people around the world have chosen (cheerlights.com), fetched now and then.',
+  'Rainbows': 'Rainbow colours moving along the lights.',
+  'Fire': 'Flickering flames.',
+  'Ocean': 'Moving water, in blues and greens.',
+  'Christmas': 'Red, green, gold and blue bulbs, twinkling or fading from one colour to the next.'
 };
-var iconKey = null;
-function showIcon(i, on, mode) {
-  var stops = !on ? ['#8c92a0'] : ICON_GRADIENTS[mode] || [i.colour || '#ffb46b'];
-  var key = stops.join();
-  if (key === iconKey) return;
-  iconKey = key;
-  var fill = stops[0], defs = '';
-  if (stops.length > 1) {
-    defs = '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' + stops.map(function (c, n) {
-      return '<stop offset="' + n / (stops.length - 1) + '" stop-color="' + c + '"/>';
-    }).join('') + '</linearGradient></defs>';
-    fill = 'url(#g)';
+
+// The Christmas style, while Christmas shows
+var styleButtons = Array.prototype.slice.call(document.querySelectorAll('#style_row button'));
+styleButtons.forEach(function (b) {
+  b.onclick = function () { light.act('/api/mode', { mode: 'Christmas', parameters: { Style: b.dataset.style } }); };
+});
+
+Base.onInfo(function (i) {
+  var l = i.light, mode = l.mode, style = (l.parameters || {}).Style;
+  el('mode_help').textContent = HELP[mode] || '';
+  el('mode_help').hidden = !HELP[mode];
+  el('style_row').hidden = mode !== 'Christmas';
+  styleButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.style === style ? 'true' : 'false'); });
+  if (mode === 'CheerLights' && l.parameters && l.parameters.Colour) {
+    el('colour_text').textContent = 'CheerLights: ' + l.parameters.Colour;
   }
-  el('icon').href = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    defs + '<path d="M16 2a10 10 0 0 0-5.5 18.3V23h11v-2.7A10 10 0 0 0 16 2z" fill="' + fill +
-    '" stroke="#333" stroke-width="1.5"/><rect x="10.5" y="24" width="11" height="2.5" rx="1" fill="#8c92a0"/>' +
-    '<rect x="12" y="27.5" width="8" height="2.5" rx="1" fill="#8c92a0"/></svg>');
-}
-
-function render(i) {
-  info = i;
-  if (!modeButtons.length) buildModes(i.modes);
-  document.title = i.name;
-  el('name').textContent = i.name;
-  el('footer_name').textContent = i.name;
-  el('footer_info').textContent = '\u2022 v' + i.version + (i.time ? ' \u2022 ' + i.time.slice(11, 16) : '') +
-    ' \u2022 up ' + duration(i.uptime_s) +
-    ' \u2022 ' + Math.round(i.mem_free / 1024) + ' KB free';
-  var on = shown(i, 'state');
-  var st = el('state');
-  st.textContent = on ? 'On' : 'Off';
-  st.className = 'badge' + (on ? ' on' : '');
-  el('power').setAttribute('aria-checked', on ? 'true' : 'false');
-  // Don't move the slider while it's being dragged.
-  var b = shown(i, 'brightness');
-  if (!brightnessSending) {
-    el('brightness').value = b;
-    el('brightness_text').textContent = b + '%';
-  }
-  // Don't overwrite a colour while it's being picked.
-  if (i.colour && !colourSending && document.activeElement !== el('colour')) {
-    el('colour').value = i.colour.toLowerCase();
-  }
-  showMode(shown(i, 'mode'));
-  showIcon(i, on, shown(i, 'mode'));
-
-  var health = el('health'), problems = [];
-  health.textContent = '';
-  var r = i.wifi.rssi;
-  if (r === null) {
-    health.appendChild(chip('Wi-Fi'));
-  } else {
-    var q = r > -60 ? 'strong' : r > -70 ? 'good' : r > -80 ? 'weak' : 'very weak';
-    health.appendChild(chip('Wi-Fi ' + q + ' (' + r + ' dBm)', r > -80 ? 'ok' : 'bad'));
-  }
-  if (!i.mqtt.enabled) {
-    health.appendChild(chip('MQTT off'));
-  } else if (i.mqtt.connected) {
-    health.appendChild(chip('MQTT connected', 'ok'));
-  } else {
-    health.appendChild(chip('MQTT not connected', 'bad'));
-    problems.push('MQTT is not connected' + (i.mqtt.error ? ': ' + i.mqtt.error : '.'));
-  }
-  showAlert(problems.join(' '));
-}
-
-// The Default button is disabled outside Colour mode, and when the default
-// colour is already showing.
-function showDefault(mode) {
-  if (!defaultColour) return;
-  el('default_swatch').style.backgroundColor = defaultColour;
-  var current = info && info.colour;
-  el('default_btn').disabled = el('set_default_btn').disabled = mode !== 'Colour' ||
-    (!!current && !colourSending && current.toLowerCase() === defaultColour.toLowerCase());
-}
-
-function showAlert(text) {
-  el('alert').textContent = text;
-  el('alert').hidden = !text;
-}
-
-function refresh() {
-  if (restarting) return;
-  return fetch('/api/info')
-    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(render)
-    .catch(function () { showAlert("Can't reach the device. It may be restarting; this page keeps trying."); });
-}
-
-// Act, then re-read the device's state once the LED controller has applied it.
-function act(path, body) {
-  say('');
-  return post(path, body)
-    .catch(function (e) { say(e.message); })
-    .then(function () { setTimeout(refresh, 300); });
-}
-
-el('power').addEventListener('click', function () {
-  var on = !(info && info.state);
-  el('power').setAttribute('aria-checked', on ? 'true' : 'false');  // show it straight away
-  expect('state', on);
-  act('/api/power/' + (on ? 'on' : 'off'));
+  if (document.activeElement !== el('alerts')) el('alerts').setAttribute('aria-checked', l.alert.enabled ? 'true' : 'false');
+  showTopics();
 });
 
-// Apply colours while picking, at most one request at a time.
-// The loop stays "sending" through the pause between requests, so a change
-// made during the pause is picked up by it rather than starting a second loop.
-function sendColour() {
-  colourSending = true;
-  var c = pendingColour;
-  pendingColour = null;
-  post('/api/mode', { mode: 'Colour', parameters: { Colour: c } })
-    .catch(function (e) { say(e.message); })
-    .then(function () {
-      if (pendingColour) { setTimeout(sendColour, 100); return; }
-      colourSending = false;
-      setTimeout(refresh, 300);
-    });
-}
-el('default_btn').addEventListener('click', function () {
-  pendingColour = null;
-  if (defaultColour) el('colour').value = defaultColour.toLowerCase();
-  el('default_btn').disabled = true;
-  expect('mode', 'Colour');
-  act('/api/mode', { mode: 'Colour' });  // no colour: the device uses its configured default
+el('alerts').addEventListener('click', function () {
+  var on = el('alerts').getAttribute('aria-checked') !== 'true';
+  el('alerts').setAttribute('aria-checked', on ? 'true' : 'false');
+  Base.api('/api/config', { alert: { enabled: on } }).then(function () {
+    Base.say('alert_msg', on ? 'Alerts on.' : 'Alerts off.', true);
+    Base.refresh();
+  }).catch(function (e) { Base.say('alert_msg', e.message); });
 });
+el('alert_test').onclick = function () {
+  Base.api('/api/alert', { test: true }).then(function () { Base.say('alert_msg', 'Alerting…', true); })
+    .catch(function (e) { Base.say('alert_msg', e.message); });
+};
+el('alert_stop').onclick = function () {
+  Base.api('/api/alert/stop', {}).then(function () { Base.say('alert_msg', ''); });
+};
 
-// The colour showing becomes the default (with its temperature, if it's a white).
-el('set_default_btn').addEventListener('click', function () {
-  var c = info && info.colour;
-  if (!c) return;
-  var parameters = { Colour: c };
-  if (info.kelvin) parameters.Kelvin = info.kelvin;
-  el('set_default_btn').disabled = true;
-  say('');
-  post('/api/config', { device: { mode_parameters: parameters } })
-    .then(function () {
-      defaultColour = c;
-      // The Device tab's copy too, so saving that tab later keeps the new default.
-      var field = el('default_colour');
-      field.value = field.dataset.saved = c.toLowerCase();
-      el('default_colour_text').textContent = c;
-      el('msg').className = 'msg good';
-      say('Saved as the default colour.');
-      setTimeout(function () { el('msg').className = 'msg'; say(''); }, 3000);
-    })
-    .catch(function (e) { el('msg').className = 'msg'; say('Not saved: ' + e.message); })
-    .then(function () { showDefault(info ? shown(info, 'mode') : null); });
-});
-
-// Apply brightness while dragging, at most one request at a time.
-function sendBrightness() {
-  brightnessSending = true;
-  var b = pendingBrightness;
-  pendingBrightness = null;
-  expect('brightness', b);
-  post('/api/brightness', { brightness: b })
-    .catch(function (e) { say(e.message); })
-    .then(function () {
-      if (pendingBrightness !== null) { setTimeout(sendBrightness, 100); return; }
-      brightnessSending = false;
-      setTimeout(refresh, 300);
-    });
-}
-el('brightness').addEventListener('input', function () {
-  say('');
-  el('brightness_text').textContent = el('brightness').value + '%';
-  pendingBrightness = Math.round(Number(el('brightness').value));
-  if (!brightnessSending) sendBrightness();
-});
-
-// White: the colour temperature, sent when the slider is let go.
-el('kelvin').addEventListener('input', function () { el('kelvin_text').textContent = el('kelvin').value + ' K'; });
-el('kelvin').addEventListener('change', function () {
-  expect('mode', 'Colour');
-  act('/api/mode', { mode: 'Colour', parameters: { Kelvin: Number(el('kelvin').value) } });
-});
-
-// Speed: the number follows the slider; the change is sent when it's let go.
-el('speed').addEventListener('input', function () { el('speed_text').textContent = el('speed').value; });
-el('speed').addEventListener('change', function () {
-  var mode = info && shown(info, 'mode'), v = Number(el('speed').value);
-  if (!mode) return;
-  var parameters = { Speed: v };
-  if (mode === 'Christmas' && info.style) parameters.Style = shown(info, 'style');
-  expect('speed', v);
-  act('/api/mode', { mode: mode, parameters: parameters });
-});
-
-el('colour').addEventListener('input', function () {
-  say('');
-  pendingColour = el('colour').value;
-  if (!colourSending) sendColour();
-});
-
-setInterval(function () { if (!document.hidden) refresh(); }, 3000);
-document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
-
-// Settings forms. Each field is named by its place in /api/config (for example
-// mqtt.topic_base), so loading and saving work the same way for every field.
-// Settings in LIVE apply at once; changing any other one restarts the device,
-// and the Save button says so before it's pressed.
-var LIVE = ['device.default_state', 'device.default_brightness', 'device.default_mode', 'device.mode_parameters.Colour',
-  'device.cheerlights_url', 'device.cheerlights_update_interval', 'device.log_level', 'device.led_layout',
-  'device.led_reverse', 'device.christmas_style', 'device.transition_ms', 'device.effect_speed',
-  'device.utc_offset_min', 'device.dst', 'device.latitude', 'device.longitude', 'web.password', 'web.clear_password'];
-var settingsForms = document.querySelectorAll('form.settings');
-
-function fields(f) {
-  return Array.prototype.filter.call(f.elements, function (e) { return e.name && e.type !== 'submit'; });
-}
-// The field's value as the API has it: data-t marks drop-downs of true/false or numbers.
-function typed(e) {
-  if (e.type === 'checkbox') return e.checked;
-  if (e.type === 'number' || e.dataset.t === 'int') return e.value === '' ? null : Number(e.value);
-  if (e.dataset.t === 'bool') return e.value === 'true';
-  return e.value;
-}
-function collect(f) {
-  var body = {};
-  fields(f).forEach(function (e) {
-    if (e.type === 'password' && !e.value) return;  // blank keeps the saved password
-    var path = e.name.split('.'), o = body;
-    for (var i = 0; i < path.length - 1; i++) o = o[path[i]] = o[path[i]] || {};
-    o[path[path.length - 1]] = typed(e);
-  });
-  return body;
-}
-function fill(cfg) {
-  settingsForms.forEach(function (f) {
-    fields(f).forEach(function (e) {
-      var v = e.name.split('.').reduce(function (o, k) { return o && o[k]; }, cfg);
-      if (e.type === 'checkbox') e.checked = !!v;
-      else if (v !== undefined && v !== null) e.value = String(v);
-    });
-  });
-}
-// A tick box's value never changes, so compare whether it's ticked.
-function val(e) { return e.type === 'checkbox' ? String(e.checked) : e.value; }
-function remember(f) {
-  fields(f).forEach(function (e) { e.dataset.saved = val(e); });
-  showSave(f);
-}
-function needsRestart(f) {
-  return fields(f).some(function (e) { return LIVE.indexOf(e.name) < 0 && val(e) !== e.dataset.saved; });
-}
-function showSave(f) {
-  f.querySelector('.save').textContent = needsRestart(f) ? 'Save & Restart' : 'Save';
-}
-
-// Wait until the device answers again with a fresh uptime, then reload.
-function waitForRestart(msg) {
-  var start = Date.now();
-  restarting = true;
-  function poll() {
-    var waited = (Date.now() - start) / 1000;
-    if (waited > 60) msg.textContent = 'Still restarting. This is taking longer than usual; reload the page once the lights respond.';
-    fetch('/api/info', { cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
-      .then(function (i) {
-        if (i.uptime_s <= (Date.now() - start) / 1000 + 1) location.reload();
-        else setTimeout(poll, 1500);
-      })
-      .catch(function () { setTimeout(poll, 1500); });
-  }
-  setTimeout(poll, 2000);
-}
-
-settingsForms.forEach(function (f) {
-  f.addEventListener('input', function () { showSave(f); });
-  f.addEventListener('change', function () { showSave(f); });
-  f.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var msg = f.querySelector('.msg'), btn = f.querySelector('.save');
-    fields(f).forEach(function (x) { x.removeAttribute('aria-invalid'); });
-    msg.className = 'msg good';
-    msg.textContent = 'Saving…';
-    btn.disabled = true;
-    var body = collect(f);
-    if (f.querySelector('#events')) body.device.schedule = readEvents();
-    post('/api/config', body)
-      .then(function (j) {
-        if (j.restart_required) {
-          msg.textContent = 'Saved. Restarting the device…';
-          // The device may restart before it answers, so carry on either way.
-          return post('/api/restart').catch(function () {}).then(function () { waitForRestart(msg); });
-        }
-        msg.textContent = 'Saved.';
-        var colour = f.elements['device.mode_parameters.Colour'];
-        if (colour) {
-          defaultColour = colour.value;
-          el('default_colour_text').textContent = defaultColour;
-          if (info) render(info);
-        }
-        var pw = f.elements['web.password'], clear = f.elements['web.clear_password'];
-        if (pw) {
-          if (clear.checked) el('web_password_state').textContent = 'none set';
-          else if (pw.value) el('web_password_state').textContent = 'set';
-          pw.value = '';
-          clear.checked = false;
-        }
-        remember(f);
-        btn.disabled = false;
-      })
-      .catch(function (err) {
-        msg.className = 'msg';
-        msg.textContent = 'Not saved: ' + err.message;
-        // Errors start with the setting's name (topic_base, queue_len...): point at that field.
-        var key = (/^\w+/.exec(err.message) || [''])[0];
-        var bad = fields(f).filter(function (x) { return x.name.split('.').pop() === key; })[0];
-        if (bad) {
-          var d = bad.closest('details');
-          if (d) d.open = true;
-          bad.setAttribute('aria-invalid', 'true');
-          bad.focus();
-        }
-        btn.disabled = false;
-      });
-  });
-});
-
-document.querySelectorAll('.reset-btn').forEach(function (b) {
-  b.addEventListener('click', function () {
-    if (!confirm(b.dataset.confirm)) return;
-    var msg = el('reset_msg'), wifi = b.dataset.wifi === 'true';
-    msg.className = 'msg good';
-    msg.textContent = 'Resetting\u2026';
-    post('/api/reset', { confirm: true, wifi: wifi })
-      .then(function () {
-        if (wifi) {
-          restarting = true;
-          msg.textContent = 'Reset. The device is starting setup mode: join the PlasmaStick-SETUP Wi-Fi network, then open http://192.168.4.1 to set it up again.';
-        } else {
-          msg.textContent = 'Reset. Restarting the device\u2026';
-          waitForRestart(msg);
-        }
-      })
-      .catch(function (err) { msg.className = 'msg'; msg.textContent = 'Not reset: ' + err.message; });
-  });
-});
-
-// Show the topics the base gives, as they'll be once saved.
-var deviceName = '';
+// The topics under the topic base, as they'll be once saved
 function showTopics() {
-  var base = el('topic_base').value.trim().split('{name}').join(deviceName), p = el('topic_preview');
+  var i = Base.info(), p = el('topic_preview'), base = el('topic_base').value.trim();
   p.textContent = '';
-  if (!base) return;
-  [['Commands', '/control'], ['State', '/state'], ['Online status', '/status']].forEach(function (x) {
-    var d = document.createElement('div'), c = document.createElement('code');
-    d.textContent = x[0] + ': ';
-    c.textContent = base + x[1];
-    d.appendChild(c);
-    p.appendChild(d);
+  if (!base || !i) return;
+  base = base.split('{name}').join(i.name);
+  [['Commands', '/control'], ['State', '/state'], ['Alerts', '/alert'], ['Online status', '/status']].forEach(function (x) {
+    p.appendChild(Base.mk('div', { text: x[0] + ': ' }, [Base.mk('code', { text: base + x[1] })]));
   });
 }
 el('topic_base').addEventListener('input', showTopics);
 
-// Time zones, as offsets in minutes: every hour, and the half and quarter hours in use.
-[-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240, 270,
-  300, 330, 345, 360, 390, 420, 480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840].forEach(function (m) {
-  var o = document.createElement('option'), a = Math.abs(m);
-  o.value = m;
-  o.textContent = 'UTC' + (m < 0 ? '\u2212' : '+') + ('0' + Math.floor(a / 60)).slice(-2) + ':' + ('0' + a % 60).slice(-2);
-  el('utc_offset_min').appendChild(o);
-});
-
-// Schedule events: built from /api/config's device.schedule, read back on save.
-var DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-function mk(tag, props, kids) {
-  var e = document.createElement(tag);
-  for (var k in props) {
-    if (k === 'text') e.textContent = props[k];
-    else if (k.slice(0, 5) === 'aria-' || k === 'data-k') e.setAttribute(k, props[k]);
-    else e[k] = props[k];
-  }
-  (kids || []).forEach(function (c) { e.appendChild(c); });
-  return e;
-}
-function options(select, list, value) {
-  list.forEach(function (o) { select.appendChild(mk('option', { value: o[0], text: o[1] })); });
-  select.value = value;
-  return select;
-}
-function eventRow(ev) {
-  var days = mk('div', { className: 'days', 'aria-label': 'Days' }, DAY_NAMES.map(function (d, n) {
-    return mk('label', {}, [mk('input', { type: 'checkbox', checked: ev.days.indexOf(n) >= 0, 'aria-label': d }),
-      document.createTextNode(d.charAt(0))]);
-  }));
-  var sun = ev.at === 'sunrise' || ev.at === 'sunset';
-  var when = options(mk('select', { 'aria-label': 'When', 'data-k': 'when' }),
-    [['time', 'At'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset']], sun ? ev.at : 'time');
-  var time = mk('input', { type: 'time', value: sun ? '18:00' : ev.at, 'aria-label': 'Time', 'data-k': 'time' });
-  var offset = mk('input', { type: 'number', min: -180, max: 180, value: ev.offset || 0, 'aria-label': 'Minutes after (negative: before)', 'data-k': 'offset' });
-  var offsetLabel = mk('span', { className: 'note', text: 'min' });
-  function showWhen() {
-    var isSun = when.value !== 'time';
-    time.hidden = isSun;
-    offset.hidden = offsetLabel.hidden = !isSun;
-  }
-  when.addEventListener('change', showWhen);
-  var action = options(mk('select', { 'aria-label': 'Action', 'data-k': 'action' }), [['on', 'Turn on'], ['off', 'Turn off']], ev.action);
-  var modes = [['', 'Same mode']].concat((info ? info.modes : []).map(function (m) { return [m, m]; }));
-  var mode = options(mk('select', { 'aria-label': 'Mode', 'data-k': 'mode' }), modes, ev.mode || '');
-  var bright = mk('input', { type: 'number', min: 1, max: 100, placeholder: '%', value: ev.brightness || '', 'aria-label': 'Brightness (blank: unchanged)', 'data-k': 'brightness' });
-  function showAction() { mode.hidden = bright.hidden = action.value === 'off'; }
-  action.addEventListener('change', showAction);
-  var row = mk('div', { className: 'event' }, [days, when, time, offset, offsetLabel, action, mode, bright]);
-  row.appendChild(mk('button', { type: 'button', className: 'reset remove', text: 'Remove', onclick: function () {
-    row.remove();
-    el('add_event').disabled = false;
-    showSave(row.form || document.querySelector('#ps form'));
-  } }));
-  showWhen();
-  showAction();
-  return row;
-}
-function showEvents(events) {
-  el('events').textContent = '';
-  events.forEach(function (ev) { el('events').appendChild(eventRow(ev)); });
-  el('add_event').disabled = events.length >= 8;
-}
-function readEvents() {
-  return Array.prototype.map.call(el('events').children, function (row) {
-    function f(k) { return row.querySelector('[data-k=' + k + ']'); }
-    var ev = { days: [], action: f('action').value };
-    row.querySelectorAll('.days input').forEach(function (c, n) { if (c.checked) ev.days.push(n); });
-    if (f('when').value === 'time') ev.at = f('time').value;
-    else { ev.at = f('when').value; ev.offset = Number(f('offset').value) || 0; }
-    if (ev.action === 'on') {
-      if (f('mode').value) ev.mode = f('mode').value;
-      if (f('brightness').value) ev.brightness = Number(f('brightness').value);
-    }
-    return ev;
-  });
-}
-el('add_event').addEventListener('click', function () {
-  el('events').appendChild(eventRow({ days: [0, 1, 2, 3, 4, 5, 6], at: '18:00', action: 'on' }));
-  el('add_event').disabled = el('events').children.length >= 8;
-});
-
-// Today's sunrise and sunset at the location entered (the same sums as the
-// device's schedule.py), so it can be checked before saving.
-function sunTimes(lat, lon, date) {
-  var rad = Math.PI / 180, days = Math.floor(date.getTime() / 86400000);
-  var n = days - 10957 - lon / 360, m = (357.5291 + 0.98560028 * n) % 360;
-  var c = 1.9148 * Math.sin(m * rad) + 0.02 * Math.sin(2 * m * rad) + 0.0003 * Math.sin(3 * m * rad);
-  var ecl = (m + c + 180 + 102.9372) % 360;
-  var transit = 2451545 + n + 0.0053 * Math.sin(m * rad) - 0.0069 * Math.sin(2 * ecl * rad);
-  var dec = Math.asin(Math.sin(ecl * rad) * Math.sin(23.4397 * rad));
-  var ch = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
-  if (ch < -1 || ch > 1) return null;
-  var h = Math.acos(ch) / rad / 360;
-  return [transit - h, transit + h].map(function (jd) { return new Date((jd - 2440587.5) * 86400000); });
-}
-function showSun() {
-  var lat = parseFloat(el('latitude').value), lon = parseFloat(el('longitude').value), note = el('sun_note');
-  var base = 'For sunrise and sunset events. East and north are positive.';
-  if (isNaN(lat) || isNaN(lon)) { note.textContent = base; return; }
-  var t = sunTimes(lat, lon, new Date()), hm = function (d) { return d.toTimeString().slice(0, 5); };
-  note.textContent = base + (t ? ' Today here: sunrise ' + hm(t[0]) + ', sunset ' + hm(t[1]) + ' (this browser\u2019s time).'
-    : ' The sun doesn\u2019t rise or set there today.');
-}
-el('latitude').addEventListener('input', showSun);
-el('longitude').addEventListener('input', showSun);
-
-// The settings load after the first /api/info, which brings the list of modes
-// the Default Mode drop-down needs.
-function loadConfig() {
-  return fetch('/api/config')
-    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (cfg) {
-      var dev = cfg.device;
-      var colour = ((dev.mode_parameters && dev.mode_parameters.Colour) || '#ffb46b').toLowerCase();
-      dev.mode_parameters = { Colour: colour };
-      fill(cfg);
-      defaultColour = colour;
-      showDefault(info ? shown(info, 'mode') : null);
-      el('default_colour_text').textContent = colour;
-      el('ssid').value = cfg.wlan.ssid;
-      showEvents(dev.schedule || []);
-      showSun();
-      deviceName = dev.device_name;
-      showTopics();
-      el('web_password_state').textContent = cfg.web && cfg.web.password_set ? 'set' : 'none set';
-      settingsForms.forEach(function (f) { remember(f); f.querySelector('.save').disabled = false; });
-    })
-    .catch(function (e) { showAlert('Could not load the settings (' + e.message + '). Reload to try again.'); });
-}
-
-refresh().then(loadConfig);
+Base.start();
 </script>
 </body>
 </html>

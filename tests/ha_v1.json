@@ -1,0 +1,173 @@
+{
+ "ha_light": {
+  "availability_topic": "/home/device/pumpkin/status",
+  "brightness": true,
+  "brightness_scale": 100,
+  "command_topic": "/home/device/pumpkin/ha/set",
+  "device": {
+   "identifiers": [
+    "pumpkin"
+   ],
+   "manufacturer": "Pimoroni",
+   "model": "Plasma Stick 2040 W",
+   "name": "pumpkin",
+   "sw_version": "1.4.2"
+  },
+  "effect": true,
+  "effect_list": [
+   "Colour",
+   "CheerLights",
+   "Rainbows",
+   "Fire",
+   "Ocean",
+   "Christmas"
+  ],
+  "max_mireds": 500,
+  "min_mireds": 153,
+  "name": null,
+  "schema": "json",
+  "state_topic": "/home/device/pumpkin/ha/state",
+  "supported_color_modes": [
+   "rgb",
+   "color_temp"
+  ],
+  "unique_id": "pumpkin_light"
+ },
+ "ha_sensor_ip": {
+  "availability_topic": "/home/device/pumpkin/status",
+  "device": {
+   "identifiers": [
+    "pumpkin"
+   ]
+  },
+  "entity_category": "diagnostic",
+  "name": "IP address",
+  "state_topic": "/home/device/pumpkin/info",
+  "unique_id": "pumpkin_ip",
+  "value_template": "{{ value_json.ip }}"
+ },
+ "ha_sensor_mem_free": {
+  "availability_topic": "/home/device/pumpkin/status",
+  "device": {
+   "identifiers": [
+    "pumpkin"
+   ]
+  },
+  "device_class": "data_size",
+  "entity_category": "diagnostic",
+  "name": "Free memory",
+  "state_class": "measurement",
+  "state_topic": "/home/device/pumpkin/info",
+  "unique_id": "pumpkin_mem_free",
+  "unit_of_measurement": "B",
+  "value_template": "{{ value_json.mem_free }}"
+ },
+ "ha_sensor_rssi": {
+  "availability_topic": "/home/device/pumpkin/status",
+  "device": {
+   "identifiers": [
+    "pumpkin"
+   ]
+  },
+  "device_class": "signal_strength",
+  "entity_category": "diagnostic",
+  "name": "Wi-Fi signal",
+  "state_class": "measurement",
+  "state_topic": "/home/device/pumpkin/info",
+  "unique_id": "pumpkin_rssi",
+  "unit_of_measurement": "dBm",
+  "value_template": "{{ value_json.rssi }}"
+ },
+ "ha_sensor_uptime_s": {
+  "availability_topic": "/home/device/pumpkin/status",
+  "device": {
+   "identifiers": [
+    "pumpkin"
+   ]
+  },
+  "device_class": "duration",
+  "entity_category": "diagnostic",
+  "name": "Uptime",
+  "state_class": "total_increasing",
+  "state_topic": "/home/device/pumpkin/info",
+  "unique_id": "pumpkin_uptime_s",
+  "unit_of_measurement": "s",
+  "value_template": "{{ value_json.uptime_s }}"
+ },
+ "ha_state_colour": {
+  "brightness": 40,
+  "color": {
+   "b": 0,
+   "g": 128,
+   "r": 255
+  },
+  "color_mode": "rgb",
+  "effect": "Colour",
+  "state": "ON"
+ },
+ "ha_state_kelvin": {
+  "brightness": 40,
+  "color": {
+   "b": 87,
+   "g": 167,
+   "r": 255
+  },
+  "color_mode": "color_temp",
+  "color_temp": 370,
+  "effect": "Colour",
+  "state": "ON"
+ },
+ "ha_state_rainbows": {
+  "brightness": 66,
+  "color_mode": "rgb",
+  "effect": "Rainbows",
+  "state": "OFF"
+ },
+ "modes": [
+  "Colour",
+  "CheerLights",
+  "Rainbows",
+  "Fire",
+  "Ocean",
+  "Christmas"
+ ],
+ "state_colour": {
+  "Brightness": 40,
+  "Mode": "Colour",
+  "ModeParameters": {
+   "Colour": "#ff8000"
+  },
+  "State": true
+ },
+ "state_kelvin": {
+  "Brightness": 40,
+  "Mode": "Colour",
+  "ModeParameters": {
+   "Colour": "#ffa757",
+   "Kelvin": 2700
+  },
+  "State": true
+ },
+ "state_rainbows": {
+  "Brightness": 66,
+  "Mode": "Rainbows",
+  "ModeParameters": {
+   "Speed": 5
+  },
+  "State": false
+ },
+ "topics": {
+  "control": "/home/device/pumpkin/control",
+  "group": "plasmastick/group/porch",
+  "ha_config": "homeassistant/light/pumpkin/config",
+  "ha_sensor_ip": "homeassistant/sensor/pumpkin/ip/config",
+  "ha_sensor_mem_free": "homeassistant/sensor/pumpkin/mem_free/config",
+  "ha_sensor_rssi": "homeassistant/sensor/pumpkin/rssi/config",
+  "ha_sensor_uptime_s": "homeassistant/sensor/pumpkin/uptime_s/config",
+  "ha_set": "/home/device/pumpkin/ha/set",
+  "ha_state": "/home/device/pumpkin/ha/state",
+  "info": "/home/device/pumpkin/info",
+  "state": "/home/device/pumpkin/state",
+  "status": "/home/device/pumpkin/status"
+ }
+}

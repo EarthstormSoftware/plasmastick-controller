@@ -5,8 +5,18 @@ import json
 import pytest
 
 import effects
-from deviceconfig import DeviceConfig
-from ledstrip import EFFECT_MODES, MODES, LedStrip, light_output
+import product
+from base.light import Light, LIGHT_SETTINGS
+from base.schedule import schedule_settings
+from base.settings import Settings, merge
+
+EFFECT_MODES = ('Rainbows', 'Fire', 'Ocean', 'Christmas')
+MODES = ('Colour',) + product.MODE_ORDER
+
+
+def light_output(percent):
+    """The share of full output percent brightness draws, as the light works it out."""
+    return product.MIN_LEVEL + (1 - product.MIN_LEVEL) * (percent - 1) / 99
 
 
 class Strip:
@@ -80,54 +90,87 @@ def test_rainbows_follows_brightness():
     assert max(max(p) for p in strip.pixels) < bright
 
 
+class Output:
+    """The strip as the light sees it: effects draw into .strip."""
+    def __init__(self, n):
+        self.count = n
+        self.strip = Strip(n)
+
+    def paint(self, colour, level):
+        for i in range(self.count):
+            self.strip.set_rgb(i, *(int(c * level + 0.5) for c in colour))
+
+    def clear(self):
+        self.strip.pixels = [(0, 0, 0)] * self.count
+
+
+def settings(tmp_path, **device):
+    s = Settings(str(tmp_path / 'config.json'), merge(LIGHT_SETTINGS, schedule_settings(MODES), product.SETTINGS))
+    if device:
+        assert s.update({'device': device})[0] is None
+    return s
+
+
 @pytest.fixture
-def strip(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / 'config.json').write_text(json.dumps({'device': {'device_led_count': 12}}))
-    return LedStrip(DeviceConfig.loadConfigFromFile())
+def light(tmp_path):
+    return Light(Output(12), settings(tmp_path, default_state=True, transition_ms=0), product.LIGHT_MODES, product,
+                 product.MIN_LEVEL)
 
 
-def test_layout_defaults_to_bottle(strip):
-    assert (strip.device_config.led_layout, strip.device_config.led_reverse) == ('bottle', False)
+def test_the_modes_are_1_4s_in_its_order(light):
+    assert light.modes == ('Colour', 'CheerLights', 'Rainbows', 'Fire', 'Ocean', 'Christmas')
 
 
-def test_a_layout_change_remakes_the_animation(strip):
-    strip.current_mode = 'Rainbows'
-    first = strip._animation()
-    assert strip._animation() is first
-    strip.device_config.led_layout = 'horizontal'
-    second = strip._animation()
+def test_layout_defaults_to_bottle(light):
+    assert (light.settings.get('device', 'led_layout'), light.settings.get('device', 'led_reverse')) == ('bottle', False)
+
+
+def test_a_layout_change_remakes_the_animation(light):
+    light.set(mode='Rainbows')
+    first = light.effect()
+    assert light.effect() is first
+    light.settings.update({'device': {'led_layout': 'horizontal'}})
+    product.applied(type('D', (), {'light': light}), {('device', 'led_layout')})
+    second = light.effect()
     assert second is not first
-    strip.device_config.led_reverse = True
-    third = strip._animation()
+    light.settings.update({'device': {'led_reverse': True}})
+    product.applied(type('D', (), {'light': light}), {('device', 'led_reverse')})
+    third = light.effect()
     assert third is not second and list(third.pos) == list(second.pos)[::-1]
 
 
-def test_a_bottle_ignores_reverse(strip):
-    strip.current_mode = 'Rainbows'
-    strip.device_config.led_reverse = True
-    assert list(strip._animation().pos) == sorted(strip._animation().pos)
+def test_a_bottle_ignores_reverse(light):
+    light.settings.update({'device': {'led_reverse': True}})
+    light.set(mode='Rainbows')
+    assert list(light.effect().pos) == sorted(light.effect().pos)
 
 
-def test_the_controller_animates(strip):
+def test_a_christmas_style_remakes_it_and_shows_in_the_state(light):
+    light.set(mode='Christmas')
+    first = light.effect()
+    assert light.state()['ModeParameters'] == {'Speed': 5, 'Style': 'Twinkle'}
+    assert light.set(parameters={'Style': 'Fade'}) is None
+    assert light.effect() is not first
+    assert light.state()['ModeParameters']['Style'] == 'Fade'
+    assert light.set(parameters={'Style': 'Disco'}) is not None
+
+
+def test_the_light_animates_the_strip(light):
     async def run():
-        strip.set_next_state(True)
-        strip.set_next_mode('Rainbows')
-        task = asyncio.create_task(strip.controller())
+        light.set(mode='Rainbows', brightness=100, transition_ms=0)
+        task = asyncio.create_task(light.run())
         await asyncio.sleep(0.15)
-        first = list(strip.led_strip.pixels)
+        first = list(light.output.strip.pixels)
         await asyncio.sleep(0.15)
         task.cancel()
-        return first, list(strip.led_strip.pixels)
+        return first, list(light.output.strip.pixels)
     first, later = asyncio.run(run())
     assert None not in first and later != first
-    assert strip.current_colour is None
 
 
-def test_unusable_saved_layout_falls_back_to_bottle(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_unusable_saved_layout_falls_back_to_bottle(tmp_path):
     (tmp_path / 'config.json').write_text(json.dumps({'device': {'led_layout': 'spiral'}}))
-    assert DeviceConfig.loadConfigFromFile().led_layout == 'bottle'
+    assert settings(tmp_path).get('device', 'led_layout') == 'bottle'
 
 
 def run(effect, n, frames, output=1.0):
@@ -274,19 +317,17 @@ def test_reversed_fade_drifts_the_other_way():
     assert sa.pixels != sb.pixels
 
 
-def test_christmas_style_is_checked():
-    from ledstrip import mode_parameters_error
-    assert mode_parameters_error('Christmas', {'Style': 'Fade'}) is None
-    assert mode_parameters_error('Christmas', {'Style': 'Disco'}) == 'Style must be one of Twinkle, Fade'
+def test_christmas_style_is_checked(light):
+    assert light.parameters_error('Christmas', {'Style': 'Fade'}) is None
+    assert light.parameters_error('Christmas', {'Style': 'Disco'}) == 'Style must be one of Twinkle, Fade'
 
 
-def test_changing_the_default_style_remakes_the_animation(strip):
-    strip.current_mode = 'Christmas'
-    strip.mode_parameters = None
-    first = strip._animation()
-    assert not first.fade
-    strip.device_config.christmas_style = 'Fade'
-    assert strip._animation().fade
+def test_changing_the_default_style_remakes_the_animation(light):
+    light.set(mode='Christmas')
+    assert not light.effect().fade
+    light.settings.update({'device': {'christmas_style': 'Fade'}})
+    product.applied(type('D', (), {'light': light}), {('device', 'christmas_style')})
+    assert light.effect().fade
 
 
 def test_colour_tables_are_built_once_and_shared():
@@ -320,35 +361,29 @@ def test_speed_scales_the_smooth_effects_and_the_flicker_rate():
     assert fire.frame(strip, 1.0) == effects.frame_ms(10)
 
 
-def test_speed_is_checked_and_changes_without_restarting(strip):
-    from ledstrip import mode_parameters_error
-    assert mode_parameters_error('Rainbows', {'Speed': 7}) is None
-    assert mode_parameters_error('Rainbows', {'Speed': 11}) == 'Speed must be a whole number, 1-10'
-    assert mode_parameters_error('Colour', {'Speed': 11}) is None  # only the animations have a speed
-    strip.current_mode = 'Rainbows'
-    first = strip._animation()
-    assert first.speed == 5
-    strip.mode_parameters = {'Speed': 9}
-    assert strip._animation() is first and first.speed == 9
-    strip.mode_parameters = {}
-    strip.device_config.effect_speed = 3
-    assert strip._animation().speed == 3
+def test_speed_is_checked_and_changes_without_restarting(light):
+    assert light.parameters_error('Rainbows', {'Speed': 7}) is None
+    assert light.parameters_error('Rainbows', {'Speed': 11}) == 'Speed must be a whole number, 1-10'
+    light.set(mode='Rainbows')
+    first = light.effect()
+    assert light.speed() == 5
+    light.set(parameters={'Speed': 9})
+    assert light.effect() is first and light.speed() == 9
 
 
-def test_reselecting_a_mode_carries_the_animation_on(strip):
+def test_reselecting_a_mode_carries_the_animation_on(light):
     async def go():
-        strip.set_next_state(True)
-        strip.set_next_mode('Rainbows')
-        task = asyncio.create_task(strip.controller())
+        light.set(on=True, mode='Rainbows', transition_ms=0)
+        task = asyncio.create_task(light.run())
         await asyncio.sleep(0.1)
-        first = strip._effect
-        strip.set_next_mode('Rainbows', {'Speed': 8})
+        first = light._effect
+        light.set(mode='Rainbows', parameters={'Speed': 8})
         await asyncio.sleep(0.1)
-        same = strip._effect
-        strip.set_next_mode('Fire')
+        same = light._effect
+        light.set(mode='Fire')
         await asyncio.sleep(0.1)
         task.cancel()
-        return first, same, strip._effect
+        return first, same, light._effect
     first, same, fire = asyncio.run(go())
-    assert same is first and same.speed == 8
+    assert same is first and same.speed == 8  # the light sets it on each frame
     assert isinstance(fire, effects.Fire)
