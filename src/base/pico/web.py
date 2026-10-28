@@ -127,10 +127,18 @@ def routes(app, device):
         no = refused()
         if no:
             return no
-        error = updater[0].begin(request.json)
+        # A manifest of more than a few files is over 1 KB, so it comes as a stream (see max_body_length above)
+        if request.content_length and not request.body:
+            try:
+                manifest = json.loads(await request.stream.readexactly(request.content_length))
+            except ValueError:
+                manifest = None
+        else:
+            manifest = request.json
+        error = updater[0].begin(manifest)
         if error:
             return {'success': False, 'error': error}, 400
-        Log.info(TAG, 'Receiving update {}'.format(request.json['version']))
+        Log.info(TAG, 'Receiving update {}'.format(manifest['version']))
         return {'success': True}
 
     @app.put('/api/update/file/<path:path>')
