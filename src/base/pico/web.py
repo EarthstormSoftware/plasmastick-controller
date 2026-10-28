@@ -19,6 +19,32 @@ from base.microdot import Request, Response
 TAG = 'HTTP'
 
 
+async def _manifest_lines(request):
+    """A manifest sent a line at a time (see ota.py): read and parsed a line at a time, so however many files it
+    lists, no block of more than a line is needed. None if it can't be read."""
+    left, manifest, files, remove = request.content_length or 0, None, [], []
+    try:
+        while left > 0:
+            line = await request.stream.readline()
+            if not line:
+                break
+            left -= len(line)
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            if manifest is None:
+                manifest = item
+            elif 'remove' in item:
+                remove.append(item['remove'])
+            else:
+                files.append(item)
+    except ValueError:
+        return None
+    if isinstance(manifest, dict):
+        manifest['files'], manifest['remove'] = files, remove
+    return manifest
+
+
 def routes(app, device):
     from base import pico as platform
     # Bodies over 1 KB (update files) are streamed in small pieces: a Pico's heap is too fragmented for one block of
@@ -110,7 +136,7 @@ def routes(app, device):
         from base.pico import ota
         files = ota.installed_files()
         head = json.dumps({'version': device.product.VERSION, 'mpy': ota.mpy_version(), 'free': ota.free_bytes(),
-                           'state': ota.state()})
+                           'state': ota.state(), 'manifest_lines': True})
 
         async def answer():
             # A file at a time, rather than the whole answer (some KB) as one block
@@ -127,8 +153,10 @@ def routes(app, device):
         no = refused()
         if no:
             return no
+        if (request.content_type or '').startswith('application/x-ndjson'):
+            manifest = await _manifest_lines(request)
         # A manifest of more than a few files is over 1 KB, so it comes as a stream (see max_body_length above)
-        if request.content_length and not request.body:
+        elif request.content_length and not request.body:
             try:
                 manifest = json.loads(await request.stream.readexactly(request.content_length))
             except ValueError:

@@ -4,7 +4,11 @@ A product's scripts/wifi_update.py drives it through the HTTP API:
   GET  /api/update          the files on the device (with SHA-256), MicroPython's
                             .mpy version, free space and the last update's state
   POST /api/update/begin    a manifest: {"version", "mpy", "files": [{"path",
-                            "size", "sha256"}], "remove": [paths]}
+                            "size", "sha256"}], "remove": [paths]}; or, as GET /api/update's
+                            "manifest_lines" says it can, the same a line at a time
+                            (application/x-ndjson): {"version", "mpy"}, then {"path", "size",
+                            "sha256"} or {"remove": path} per line, so no block of several KB is
+                            needed to read it (base.pico.web)
   PUT  /api/update/file/<path>   each file in the manifest, as the raw body
   POST /api/update/commit   marks the update ready; the device then restarts
 
@@ -113,6 +117,34 @@ def installed_files():
     return files
 
 
+def space_needed(files, remove):
+    """The flash an update takes at its peak, in whole blocks: littlefs gives every file at least one block and every
+    folder two. While otaboot applies it, the staged files are renamed into place (no new space), but the staging
+    folders still stand while any new folders and the backups' folders (prev/...) are made."""
+    try:
+        block = os.statvfs(ROOT)[0]
+    except AttributeError:  # not on Windows, where the tests run
+        block = 4096
+    total = sum(max(1, -(-f['size'] // block)) for f in files) * block
+    folders = set()
+    for f in files:
+        folder = f['path'].rpartition('/')[0]
+        folders.add('update/files/' + folder)
+        if not _exists(ROOT + folder):
+            folders.add(folder)
+    for path in [f['path'] for f in files] + remove:
+        if _exists(ROOT + path):
+            folders.add('prev/' + path.rpartition('/')[0])
+    # every folder named, and those above it (update, update/files, prev, base above base/www, ...)
+    every = set()
+    for folder in folders:
+        parts = folder.rstrip('/').split('/')
+        for i in range(len(parts)):
+            if parts[i]:
+                every.add('/'.join(parts[:i + 1]))
+    return total + len(every) * 2 * block + 16384
+
+
 def free_bytes():
     s = os.statvfs(ROOT)
     return s[0] * s[3]
@@ -162,7 +194,6 @@ class Updater:
         files, remove = m.get('files'), m.get('remove', [])
         if not isinstance(files, list) or not isinstance(remove, list):
             return 'manifest needs files and remove lists'
-        total = 0
         for f in files:
             if not isinstance(f, dict):
                 return 'bad file entry'
@@ -171,15 +202,16 @@ class Updater:
                 return error
             if not isinstance(f.get('size'), int) or f['size'] < 0 or not isinstance(f.get('sha256'), str):
                 return f['path'] + ': needs size and sha256'
-            total += f['size']
         for path in remove:
             error = check_path(path)
             if error:
                 return error
-        if total + 16384 > free_bytes():
-            return 'not enough space: needs {} KB, {} KB free'.format(total // 1024 + 16, free_bytes() // 1024)
+        # The last update's staging and backups go first: they'd count against this one
         _rmtree(STAGE)
         _rmtree(PREV)  # the previous update's backups: this one replaces them
+        need = space_needed(files, remove)
+        if need > free_bytes():
+            return 'not enough space: needs {} KB, {} KB free'.format(need // 1024, free_bytes() // 1024)
         os.mkdir(STAGE)
         self.manifest = {'version': m['version'], 'files': {f['path']: f for f in files}, 'remove': remove}
         self.received = set()

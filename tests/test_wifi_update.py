@@ -17,3 +17,20 @@ def test_the_pc_sends_only_changed_files_and_removes_leftovers(tmp_path):
     send, remove = wifi_update.plan(local, installed)
     assert [f['path'] for f in send] == ['api.mpy'] and send[0]['size'] == 7
     assert remove == ['old.mpy']
+
+
+def test_the_manifest_sent_a_line_at_a_time_is_read_back_whole():
+    import asyncio
+    from base.microdot import AsyncBytesIO
+    from base.pico import web
+
+    class Request:
+        def __init__(self, body):
+            self.content_length, self.content_type, self.body = len(body), 'application/x-ndjson', None
+            self.stream = AsyncBytesIO(body)
+
+    files = [{'path': 'base/pico/web.mpy', 'size': 10, 'sha256': 'a' * 64}, {'path': 'app.mpy', 'size': 3,
+                                                                             'sha256': 'b' * 64}]
+    body = wifi_update.manifest_lines('2.1.0', 6, files, ['api.mpy'])
+    assert asyncio.run(web._manifest_lines(Request(body))) == {'version': '2.1.0', 'mpy': 6, 'files': files,
+                                                               'remove': ['api.mpy']}
