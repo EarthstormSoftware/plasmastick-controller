@@ -42,7 +42,11 @@ def password_ok(headers, password_hash):
 
 
 def _file(path, content_type):
-    response = Response.send_file(path, content_type=content_type)
+    # A Pico's build stores its web files gzipped (path.gz), a third of the flash; a Pi app's are plain
+    try:
+        response = Response.send_file(path, content_type=content_type, compressed=True, file_extension='.gz')
+    except OSError:
+        response = Response.send_file(path, content_type=content_type)
     response.headers['Cache-Control'] = 'no-store'
     return response
 

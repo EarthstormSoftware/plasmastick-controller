@@ -9,7 +9,9 @@ param(
     # (PLASMASTICK_WEB_PASSWORD, or asked for per device).
     [string[]]$WiFi,
     # Compile everything again, not just what changed.
-    [switch]$Rebuild
+    [switch]$Rebuild,
+    # Only build: compile, gzip and write buildiles.json (device path -> local file), then stop.
+    [switch]$BuildOnly
 )
 
 Set-StrictMode -Version Latest
@@ -203,6 +205,25 @@ function Compress-ToMpy {
     $script:compiled++
 }
 
+# The web files go gzipped (the base serves name.gz with Content-Encoding: gzip): a third of the flash, which a
+# Pico running two versions side by side during an update needs. .NET's gzip leaves the time out of the header, so
+# the same source gives the same file and the Wi-Fi updater doesn't send it again.
+function Compress-ToGz {
+    param([string]$Source, [string]$Destination)
+    if ((Test-Path $Destination) -and (Get-Item $Destination).LastWriteTimeUtc -ge (Get-Item $Source).LastWriteTimeUtc) {
+        return
+    }
+    New-Item -ItemType Directory -Force (Split-Path -Parent $Destination) | Out-Null
+    $out = [IO.File]::Create($Destination)
+    try {
+        $gzip = New-Object IO.Compression.GZipStream($out, [IO.Compression.CompressionLevel]::Optimal)
+        $bytes = [IO.File]::ReadAllBytes($Source)
+        try { $gzip.Write($bytes, 0, $bytes.Length) } finally { $gzip.Dispose() }
+    } finally {
+        $out.Dispose()
+    }
+}
+
 $buildDeviceDir = Join-Path $buildDir 'device'
 $buildLibDir = Join-Path $buildDir 'lib'
 $stampFile = Join-Path $buildDir 'mpy-cross.version'
@@ -231,8 +252,12 @@ foreach ($name in $moduleNames) {
 }
 # Static web UI files, served from /www on the device.
 $wwwDir = Join-Path $srcDir 'www'
+$buildWwwDir = Join-Path $buildDir 'www'
+if (Test-Path $buildWwwDir) { Remove-Item -Recurse -Force $buildWwwDir }  # nothing left from a page since removed
 foreach ($file in @(Get-ChildItem -Path $wwwDir -File)) {
-    $runtimeFiles[$file.FullName] = ":/www/$($file.Name)"
+    $gz = Join-Path $buildWwwDir "$($file.Name).gz"
+    Compress-ToGz -Source $file.FullName -Destination $gz
+    $runtimeFiles[$gz] = ":/www/$($file.Name).gz"
 }
 
 # App Base (src/base, a copy made by App Base's update-base.ps1) goes to /base, as it is in src/, but for what's
@@ -256,7 +281,9 @@ foreach ($module in $baseModules) {
     $runtimeFiles[$built] = ":/base/$mpy"
 }
 foreach ($file in @(Get-ChildItem -Path (Join-Path $baseDir 'www') -File)) {
-    $runtimeFiles[$file.FullName] = ":/base/www/$($file.Name)"
+    $gz = Join-Path $buildBaseDir "www/$($file.Name).gz"
+    Compress-ToGz -Source $file.FullName -Destination $gz
+    $runtimeFiles[$gz] = ":/base/www/$($file.Name).gz"
 }
 $otabootMpy = Join-Path $buildDeviceDir 'otaboot.mpy'
 Compress-ToMpy -Source (Join-Path $baseDir 'pico/otaboot.py') -Destination $otabootMpy
@@ -269,7 +296,7 @@ $libFilesToDeploy = @{ $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
 $totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
 Write-Host "Compiled $($script:compiled) module(s), $($script:upToDate) up to date ($totalKb KB in all)"
 
-if ($WiFi) {
+if ($WiFi -or $BuildOnly) {
     # Hand the same files to the Wi-Fi updater (main.py and otaboot excepted: USB only).
     $fileMap = [ordered]@{}
     foreach ($table in @($runtimeFiles, $libFilesToDeploy)) {
@@ -280,6 +307,10 @@ if ($WiFi) {
     }
     $mapFile = Join-Path $buildDir 'files.json'
     $fileMap | ConvertTo-Json | Set-Content -Path $mapFile -Encoding utf8
+    if ($BuildOnly) {
+        Write-Host "Built: $mapFile"
+        exit 0
+    }
     # Built once, sent to each board in turn.
     $failed = @()
     foreach ($wifiHost in $WiFi) {

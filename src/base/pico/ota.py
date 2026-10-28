@@ -28,7 +28,7 @@ STATE = ROOT + 'update_state.json'
 # The base's own folders too: the firmware before the base could only write the first four, so a device moves to the
 # base through a release whose only change is this list
 DIRS = ('', 'lib', 'lib/mqtt_as', 'www', 'base', 'base/www', 'base/pico')
-EXTENSIONS = ('.mpy', '.py', '.html', '.css', '.js')
+EXTENSIONS = ('.mpy', '.py', '.html', '.css', '.js', '.gz')  # .gz: the web files, stored gzipped
 PROTECTED = ('main.py', 'otaboot.mpy', 'otaboot.py', 'boot.py')  # USB only: they run first and do the rollback
 _NAME_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.'
 CHUNK = 512
