@@ -235,7 +235,12 @@ class LightMqtt(Mqtt):
             self._changed.set()  # the switch's state, even if it didn't change
             return error
         if self._group and topic in (t.get('group'), t.get('group_old')):
-            change = self._group.group_change(json.loads(text), light,
+            payload = json.loads(text)
+            if not retained and isinstance(payload, dict) and payload.get('From') == self.name:
+                # This light's own change coming back (twice: both group topics): a newer one may have followed it.
+                # The retained one on joining is still taken, as the group's state
+                return None
+            change = self._group.group_change(payload, light,
                                               self.device.settings.get('mqtt', 'group_brightness'))
             return light.set(local=False, **change) if change else None
         if self._watch and self._watch.topic_matches(self.alert_topic, topic):
