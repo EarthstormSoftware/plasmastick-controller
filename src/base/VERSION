@@ -1,5 +1,5 @@
 version: working copy
-commit: 605e501
+commit: 9f29d14
 48fda65767bbc8588160c4bc3348fbe44904cac3d23e1a96f4b7e16820fb453a  __init__.py
 cac1402899525417423c4b7d0c85d327e24cdf0b7cac3ccade0d84adfb474dd1  compat.py
 e629415ce6884707edcc4e6647dd7d146b3ed4d0c3e114931d873222b157168f  device.py
