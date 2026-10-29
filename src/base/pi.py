@@ -9,8 +9,9 @@ What the OS does for the app, it asks for through app-request (ApplPi OS v0.4; t
 sudo): a new version of itself, on trial; the time zone and time server; restarting the Pi. From the release after
 v0.4 (os_setup()), also setup mode: restarting into it (to rename the Pi, or change its Wi-Fi), a factory reset, and
 the Wi-Fi fallback (setup mode by itself when Wi-Fi doesn't connect: on or off, after how long, for how long). On a PC
-there's no app-request, so none of this is offered (os_requests() is False). systemd's watchdog restarts the app if
-its event loop stops (watchdog()).
+there's no app-request, so none of this is offered (os_requests() is False). The OS says what it has in APPLPI, its
+ApplPi version (applpi(); docs/app-contract.md in ApplPi OS); an OS from before it is asked as before. systemd's
+watchdog restarts the app if its event loop stops (watchdog()).
 """
 import asyncio
 import json
@@ -100,9 +101,22 @@ class RequestError(Exception):
     pass
 
 
+def applpi():
+    """The ApplPi version the OS gives the app (APPLPI, "MAJOR.MINOR", from the app contract for v1.0) as (major,
+    minor), or None on an OS from before it, or on a PC."""
+    major, _, minor = os.environ.get('APPLPI', '').partition('.')
+    return (int(major), int(minor)) if major.isdigit() and minor.isdigit() else None
+
+
+def _since(level, before):
+    """Whether the OS has what came in ApplPi level (major, minor); before() decides on an OS that doesn't say."""
+    have = applpi()
+    return have[0] == level[0] and have >= level if have else before()
+
+
 def os_requests():
     """Whether the OS takes the app's requests (ApplPi OS v0.4 or later)."""
-    return os.path.exists(APP_REQUEST)
+    return _since((1, 0), lambda: os.path.exists(APP_REQUEST))
 
 
 def _request(*args, given=None):
@@ -169,30 +183,31 @@ _setup = None
 
 
 def os_setup():
-    """Whether the OS has setup mode for the app (the release after ApplPi OS v0.4): app-request knows factory-reset.
-    Found once, from app-request itself, as /api/info asks every few seconds."""
+    """Whether the OS has setup mode for the app (ApplPi OS v0.5 or later). On an OS from before APPLPI, found once
+    from app-request itself (it knows factory-reset), as /api/info asks every few seconds."""
     global _setup
     if _setup is None:
-        try:
-            with open(APP_REQUEST, encoding='utf-8') as f:
-                _setup = 'factory-reset' in f.read()
-        except OSError:
-            _setup = False
+        _setup = _since((1, 0), lambda: _app_request_knows('factory-reset'))
     return _setup
+
+
+def _app_request_knows(text):
+    try:
+        with open(APP_REQUEST, encoding='utf-8') as f:
+            return text in f.read()
+    except OSError:
+        return False
 
 
 _wifi = None
 
 
 def os_wifi():
-    """Whether the OS takes a new Wi-Fi network from the app (app-request knows networks), found once."""
+    """Whether the OS takes a new Wi-Fi network from the app (ApplPi OS v0.6 or later; before APPLPI, app-request
+    knows networks), found once."""
     global _wifi
     if _wifi is None:
-        try:
-            with open(APP_REQUEST, encoding='utf-8') as f:
-                _wifi = 'app-request networks' in f.read()
-        except OSError:
-            _wifi = False
+        _wifi = _since((1, 0), lambda: _app_request_knows('app-request networks'))
     return _wifi
 
 
