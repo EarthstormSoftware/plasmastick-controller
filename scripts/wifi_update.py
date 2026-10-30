@@ -17,6 +17,7 @@ import json
 import os
 import re
 import subprocess
+import socket
 import sys
 import time
 import urllib.error
@@ -58,9 +59,18 @@ def plan(local, installed):
     return send, remove
 
 
+def ipv4(host):
+    """The host's IPv4 address, or the host as given if it has none. Windows may resolve a .local name to an IPv6
+    link-local address first, which Python 3.14 can't connect to (connect(): flowinfo must be 0-1048575)."""
+    try:
+        return socket.getaddrinfo(host, 80, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+    except OSError:
+        return host
+
+
 class Device:
     def __init__(self, host, password):
-        self.base = f'http://{host}'
+        self.base = f'http://{ipv4(host)}'
         token = base64.b64encode(f'update:{password}'.encode()).decode()
         self.headers = {'Authorization': f'Basic {token}'}
 

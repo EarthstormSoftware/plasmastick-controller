@@ -42,9 +42,18 @@ def report(status, name, detail=''):
     print(f'{status} {name}' + (f' ({detail})' if detail else ''), flush=True)
 
 
+def ipv4(host):
+    """The host's IPv4 address, or the host as given if it has none. Windows may resolve a .local name to an IPv6
+    link-local address first, which Python 3.14 can't connect to (connect(): flowinfo must be 0-1048575)."""
+    try:
+        return socket.getaddrinfo(host, 80, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+    except OSError:
+        return host
+
+
 class Device:
     def __init__(self, host, timeout, password=None):
-        self.base = f'http://{host}'
+        self.base = f'http://{ipv4(host)}'
         self.timeout = timeout
         self.password = password
 

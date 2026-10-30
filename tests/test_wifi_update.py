@@ -34,3 +34,22 @@ def test_the_manifest_sent_a_line_at_a_time_is_read_back_whole():
     body = wifi_update.manifest_lines('2.1.0', 6, files, ['api.mpy'])
     assert asyncio.run(web._manifest_lines(Request(body))) == {'version': '2.1.0', 'mpy': 6, 'files': files,
                                                                'remove': ['api.mpy']}
+
+
+def test_a_name_is_reached_by_its_ipv4_address(monkeypatch):
+    # Windows may give a .local name's IPv6 link-local address first, which Python 3.14 can't connect to
+    asked = []
+
+    def getaddrinfo(host, port, family=0, type=0):
+        asked.append(family)
+        return [(family, type, 6, '', ('192.0.2.7', port))]
+    monkeypatch.setattr(wifi_update.socket, 'getaddrinfo', getaddrinfo)
+    assert wifi_update.Device('board.local', 'pw').base == 'http://192.0.2.7'
+    assert asked == [wifi_update.socket.AF_INET]
+
+
+def test_a_name_without_an_ipv4_address_is_used_as_given(monkeypatch):
+    def getaddrinfo(*args):
+        raise OSError('no address')
+    monkeypatch.setattr(wifi_update.socket, 'getaddrinfo', getaddrinfo)
+    assert wifi_update.Device('board.local', 'pw').base == 'http://board.local'
