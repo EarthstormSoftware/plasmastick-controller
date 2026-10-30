@@ -1,5 +1,5 @@
 """
-What an ApplPi app asks of the OS, as routes (the Pi platform's routes(), called by base.web): GET /api/update (the
+What a Juggle app asks of the OS, as routes (the Pi platform's routes(), called by base.web): GET /api/update (the
 last update's result), POST /api/update (a .tar of the app's folder: the OS installs it on trial and restarts the app
 with it), GET and POST /api/clock ({"time_zone", "ntp"}, and the zones to choose from) and POST /api/reboot
 ({"confirm": true}: restarts the Pi). With setup mode in the OS: GET and POST /api/wifi ({"fallback": {"enabled",
@@ -11,13 +11,13 @@ from base.compat import asyncio
 from base.log import Log
 from base.web import TAG, _json
 
-# The largest app a Pi takes over the network (ApplPi OS takes up to 64 MiB)
+# The largest app a Pi takes over the network (Juggle OS takes up to 64 MiB)
 UPDATE_MAX = 16 * 1024 * 1024
 
 
 def routes(app, device):
     from base import pi as platform
-    # What an ApplPi app asks of the OS. A new version comes whole, as a .tar of the app's folder
+    # What a Juggle app asks of the OS. A new version comes whole, as a .tar of the app's folder
     from base.microdot import Request
     Request.max_content_length = Request.max_body_length = UPDATE_MAX
 
@@ -63,8 +63,8 @@ def routes(app, device):
         if _json(request).get('confirm') is not True:
             return {'success': False, 'error': 'confirm must be true'}, 400
         if not available:
-            return {'success': False, 'error': 'Only on ApplPi OS v0.4 or later.' if do == platform.restart_device
-                    else 'Only on ApplPi OS with setup mode (the release after v0.4).'}, 400
+            return {'success': False, 'error': 'Only on Juggle OS v0.4 or later.' if do == platform.restart_device
+                    else 'Only on Juggle OS with setup mode (the release after v0.4).'}, 400
         return after_answer(what, do)
 
     def after_answer(what, do):

@@ -215,7 +215,7 @@ var Base = (function () {
         api('/api/restart', {}).then(function () { say(b.dataset.msg, 'Restarting…', true); waitForRestart(msg); });
       });
     });
-    // Restarting the Pi (an ApplPi app): shown only where the OS takes the app's requests
+    // Restarting the Pi (a Juggle app): shown only where the OS takes the app's requests
     document.querySelectorAll('[data-reboot]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (!confirm(b.dataset.confirm)) return;
@@ -237,7 +237,7 @@ var Base = (function () {
             // A Pico gives its own hotspot's name (and has no Ethernet)
             say(b.dataset.msg, info && info.setup_ssid
               ? 'Restarting into setup mode. Join the ' + info.setup_ssid + ' Wi-Fi and open http://192.168.4.1.'
-              : 'Restarting into setup mode. Join the ApplPi-SETUP Wi-Fi and open http://192.168.4.1 ' +
+              : 'Restarting into setup mode. Join the Juggle-SETUP Wi-Fi and open http://192.168.4.1 ' +
                 '(on Ethernet: https://' + (info ? info.name : '<name>') + '.local/), in about a minute.', true);
           }).catch(function (e) { say(b.dataset.msg, 'Not done: ' + e.message); });
         });
@@ -266,7 +266,7 @@ var Base = (function () {
     foot.push('up ' + duration(up));
     if (i.mem_free != null) foot.push(i.mem_free > 4194304 ? Math.round(i.mem_free / 1048576) + ' MB free'
       : Math.round(i.mem_free / 1024) + ' KB free');
-    if (i.os && i.os.version) foot.push('ApplPi OS ' + i.os.version + (i.os.slot ? ' (slot ' + i.os.slot + ')' : ''));
+    if (i.os && i.os.version) foot.push('Juggle OS ' + i.os.version + (i.os.slot ? ' (slot ' + i.os.slot + ')' : ''));
     el('footer').textContent = foot.join(' • ');
 
     var health = el('health'), problems = [];
@@ -280,7 +280,7 @@ var Base = (function () {
         problems.push('MQTT is not connected' + (i.mqtt.error ? ': ' + i.mqtt.error : '.'));
       }
     }
-    // What the OS does for an ApplPi app: shown where it takes the app's requests
+    // What the OS does for a Juggle app: shown where it takes the app's requests
     var requests = !!(i.os && i.os.requests);
     document.querySelectorAll('[data-os-requests]').forEach(function (n) { n.hidden = !requests; });
     // Setup mode: the OS's on a Pi (i.os.setup), the device's own on a Pico (i.setup)
@@ -573,7 +573,7 @@ var Base = (function () {
     el('latitude').addEventListener('input', showSun);
     el('longitude').addEventListener('input', showSun);
 
-    // The time zone and time server, which are the OS's (an ApplPi app asks it to change them)
+    // The time zone and time server, which are the OS's (a Juggle app asks it to change them)
     var clockLoaded = false;
     function loadClock() {
       clockLoaded = true;

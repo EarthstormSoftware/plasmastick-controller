@@ -1,5 +1,5 @@
 """
-A small MQTT 3.1.1 client on asyncio, for CPython (an ApplPi app): nothing to install, and no threads. A Pico uses
+A small MQTT 3.1.1 client on asyncio, for CPython (a Juggle app): nothing to install, and no threads. A Pico uses
 mqtt_as instead, behind the same calls, which are all base.mqtt uses: connect(), publish(), subscribe(), message()
 and close().
 

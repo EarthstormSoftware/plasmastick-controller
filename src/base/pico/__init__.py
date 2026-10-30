@@ -1,5 +1,5 @@
 """
-The platform on a Pico W: what ApplPi OS does for an app on a Pi, a Pico does itself (Wi-Fi, setup mode, Wi-Fi
+The platform on a Pico W: what Juggle OS does for an app on a Pi, a Pico does itself (Wi-Fi, setup mode, Wi-Fi
 updates, the clock, the watchdog), with the onboard LED and the BOOTSEL button.
 
 The files on the board's root, as the firmware before the base kept them, so a device carries on as it was (and the
@@ -181,7 +181,7 @@ def health():
         'ssid': wlan.ssid if wlan is not None else None,
         'watchdog_stall': _stall,
         'mem_alloc': _mem_alloc(),
-        # Setup mode, the Wi-Fi fallback and a factory reset, from the page (as an ApplPi OS with setup mode)
+        # Setup mode, the Wi-Fi fallback and a factory reset, from the page (as a Juggle OS with setup mode)
         'setup': True,
         'setup_ssid': product.SETUP_SSID,
     }

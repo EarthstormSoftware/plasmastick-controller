@@ -3,7 +3,7 @@ The web page and JSON API, on port 80, with Microdot.
 
 Every product has: GET / (its page, www/index.html), the base's shared style and script (/base.css, /base.js),
 GET /api/info, GET and POST /api/config, POST /api/restart and POST /api/reset. A light also has base.lightweb's, the
-platform its own (a Pi's base.piweb, what an ApplPi app asks of the OS; a Pico's base.pico.web), and the product can
+platform its own (a Pi's base.piweb, what a Juggle app asks of the OS; a Pico's base.pico.web), and the product can
 add its own (routes(app, device)).
 
 Two guards before every request: a POST that a browser sends from another site's page is refused (so a malicious page

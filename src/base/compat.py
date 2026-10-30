@@ -1,4 +1,4 @@
-"""The differences between MicroPython (a Pico) and CPython (an ApplPi app), so the rest of the base is written once."""
+"""The differences between MicroPython (a Pico) and CPython (a Juggle app), so the rest of the base is written once."""
 import sys
 
 MICROPYTHON = sys.implementation.name == 'micropython'
