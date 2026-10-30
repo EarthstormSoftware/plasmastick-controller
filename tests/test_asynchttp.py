@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-import asyncdns
+from base.pico import asyncdns
 import asynchttp
 
 

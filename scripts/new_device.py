@@ -158,16 +158,21 @@ print({mark!r} + ujson.dumps({{'version': list(sys.implementation.version[:2]),
 
 def capture_wifi(port):
     """The Wi-Fi network and password from a working board, decrypted there with its own key."""
+    # The board may have App Base (2.0 on) or the firmware before it
     return run_on(port, '''import ujson
-from deviceconfig import _load_provisioning_data
-p = _load_provisioning_data()
+try:
+    from base.pico.setup import load
+    p = load('provisioning.json')
+except ImportError:
+    from deviceconfig import _load_provisioning_data
+    p = _load_provisioning_data()
 print({mark!r} + ujson.dumps({{'ssid': p['ssid'], 'password': p['password']}}))
 '''.format(mark=MARK))
 
 
 def write_board(port, name, ssid, wifi_password, mqtt_password, config):
     result = run_on(port, '''import ujson
-from wificrypto import encrypt_password, decrypt_password
+from base.pico.crypto import encrypt_password, decrypt_password
 cfg = ujson.loads({config!r})
 wiv, wenc = encrypt_password({wifi!r})
 with open('provisioning.json', 'w') as f:

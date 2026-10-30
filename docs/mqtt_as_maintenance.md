@@ -4,7 +4,9 @@ This project uses `mqtt_as` as the MQTT client library. Keep this file updated w
 
 ## Current baseline
 
-- Project wiring: WLAN lifecycle is owned by `wlan.py`.
+- Project wiring: from 2.0, App Base owns the WLAN lifecycle (`src/base/pico/wlan.py`), and `mqtt_as` is reached
+  through its adapter, `src/base/pico/mqtt.py`, which runs it in callback mode (its queue mode, with a queue of one,
+  dropped messages). Pico PIR uses the same adapter and library: upgrade both together.
 - MQTT lifecycle uses `mqtt_as` and reconnects only when WLAN is available.
 - Runtime version is logged from `mqtt_as.VERSION` at startup.
 
@@ -20,6 +22,7 @@ This project uses `mqtt_as` as the MQTT client library. Keep this file updated w
 2. Install latest `mqtt_as` to a staging path.
 3. Run smoke tests before promoting to production devices.
 4. Copy the new version into `src/lib/mqtt_as/` in this repo and commit it, so `scripts/deploy.ps1` deploys the same version.
+5. Check its licence still matches `THIRD-PARTY-NOTICES.md` (copyright line and terms), and update that file if not.
 
 Example commands (run from host machine with device attached):
 

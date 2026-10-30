@@ -9,7 +9,9 @@ param(
     # (PLASMASTICK_WEB_PASSWORD, or asked for per device).
     [string[]]$WiFi,
     # Compile everything again, not just what changed.
-    [switch]$Rebuild
+    [switch]$Rebuild,
+    # Only build: compile, gzip and write build\files.json (device path -> local file), then stop.
+    [switch]$BuildOnly
 )
 
 Set-StrictMode -Version Latest
@@ -203,6 +205,25 @@ function Compress-ToMpy {
     $script:compiled++
 }
 
+# The web files go gzipped (the base serves name.gz with Content-Encoding: gzip): a third of the flash, which a
+# Pico running two versions side by side during an update needs. .NET's gzip leaves the time out of the header, so
+# the same source gives the same file and the Wi-Fi updater doesn't send it again.
+function Compress-ToGz {
+    param([string]$Source, [string]$Destination)
+    if ((Test-Path $Destination) -and (Get-Item $Destination).LastWriteTimeUtc -ge (Get-Item $Source).LastWriteTimeUtc) {
+        return
+    }
+    New-Item -ItemType Directory -Force (Split-Path -Parent $Destination) | Out-Null
+    $out = [IO.File]::Create($Destination)
+    try {
+        $gzip = New-Object IO.Compression.GZipStream($out, [IO.Compression.CompressionLevel]::Optimal)
+        $bytes = [IO.File]::ReadAllBytes($Source)
+        try { $gzip.Write($bytes, 0, $bytes.Length) } finally { $gzip.Dispose() }
+    } finally {
+        $out.Dispose()
+    }
+}
+
 $buildDeviceDir = Join-Path $buildDir 'device'
 $buildLibDir = Join-Path $buildDir 'lib'
 $stampFile = Join-Path $buildDir 'mpy-cross.version'
@@ -220,7 +241,7 @@ Set-Content -Path $stampFile -Value $mpyCrossVersion -Encoding ascii
 $moduleNames = @(Get-ChildItem -Path $srcDir -Filter '*.py' -File | Where-Object { $_.Name -ne 'main.py' } | ForEach-Object { $_.BaseName })
 # A module removed from src/ must not be deployed from an old build.
 if (Test-Path $buildDeviceDir) {
-    Get-ChildItem -Path $buildDeviceDir -Filter '*.mpy' -File | Where-Object { $_.BaseName -notin $moduleNames } | Remove-Item -Force
+    Get-ChildItem -Path $buildDeviceDir -Filter '*.mpy' -File | Where-Object { $_.BaseName -notin ($moduleNames + 'otaboot') } | Remove-Item -Force
 }
 foreach ($name in $moduleNames) {
     Compress-ToMpy -Source (Join-Path $srcDir "$name.py") -Destination (Join-Path $buildDeviceDir "$name.mpy")
@@ -231,20 +252,51 @@ foreach ($name in $moduleNames) {
 }
 # Static web UI files, served from /www on the device.
 $wwwDir = Join-Path $srcDir 'www'
+$buildWwwDir = Join-Path $buildDir 'www'
+if (Test-Path $buildWwwDir) { Remove-Item -Recurse -Force $buildWwwDir }  # nothing left from a page since removed
 foreach ($file in @(Get-ChildItem -Path $wwwDir -File)) {
-    $runtimeFiles[$file.FullName] = ":/www/$($file.Name)"
+    $gz = Join-Path $buildWwwDir "$($file.Name).gz"
+    Compress-ToGz -Source $file.FullName -Destination $gz
+    $runtimeFiles[$gz] = ":/www/$($file.Name).gz"
 }
 
+# App Base (src/base, a copy made by App Base's update-base.ps1) goes to /base, as it is in src/, but for what's
+# only for a Pi (pi.py, piweb.py, mqttclient.py) and otaboot, which goes to the root: like main.py it's only updated
+# over USB.
+$baseDir = Join-Path $srcDir 'base'
+$buildBaseDir = Join-Path $buildDir 'base'
+$baseSkip = @('pi.py', 'piweb.py', 'mqttclient.py', 'pico/otaboot.py')
+$baseModules = @(Get-ChildItem -Path $baseDir -Recurse -Filter '*.py' -File | Where-Object { $_.FullName -notmatch '__pycache__' } |
+    ForEach-Object { $_.FullName.Substring($baseDir.Length + 1).Replace('\', '/') } | Where-Object { $_ -notin $baseSkip })
+if (Test-Path $buildBaseDir) {
+    # A module removed from the base must not be deployed from an old build
+    $wanted = @($baseModules | ForEach-Object { $_ -replace '\.py$', '.mpy' })
+    Get-ChildItem -Path $buildBaseDir -Recurse -Filter '*.mpy' -File | Where-Object {
+        $_.FullName.Substring($buildBaseDir.Length + 1).Replace('\', '/') -notin $wanted } | Remove-Item -Force
+}
+foreach ($module in $baseModules) {
+    $mpy = $module -replace '\.py$', '.mpy'
+    $built = Join-Path $buildBaseDir $mpy
+    Compress-ToMpy -Source (Join-Path $baseDir $module) -Destination $built
+    $runtimeFiles[$built] = ":/base/$mpy"
+}
+foreach ($file in @(Get-ChildItem -Path (Join-Path $baseDir 'www') -File)) {
+    $gz = Join-Path $buildBaseDir "www/$($file.Name).gz"
+    Compress-ToGz -Source $file.FullName -Destination $gz
+    $runtimeFiles[$gz] = ":/base/www/$($file.Name).gz"
+}
+$otabootMpy = Join-Path $buildDeviceDir 'otaboot.mpy'
+Compress-ToMpy -Source (Join-Path $baseDir 'pico/otaboot.py') -Destination $otabootMpy
+$runtimeFiles[$otabootMpy] = ':/otaboot.mpy'
+
 # Libraries live in /lib on the device (on MicroPython's default sys.path).
-$microdotMpy = Join-Path $buildLibDir 'microdot.mpy'
 $mqttAsMpy = Join-Path $buildLibDir 'mqtt_as/__init__.mpy'
-Compress-ToMpy -Source (Join-Path $srcDir 'lib/microdot.py') -Destination $microdotMpy
 Compress-ToMpy -Source (Join-Path $srcDir 'lib/mqtt_as/__init__.py') -Destination $mqttAsMpy
-$libFilesToDeploy = @{ $microdotMpy = ':/lib/microdot.mpy'; $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
+$libFilesToDeploy = @{ $mqttAsMpy = ':/lib/mqtt_as/__init__.mpy' }
 $totalKb = [int]((@($runtimeFiles.Keys) + @($libFilesToDeploy.Keys) | ForEach-Object { (Get-Item $_).Length } | Measure-Object -Sum).Sum / 1024)
 Write-Host "Compiled $($script:compiled) module(s), $($script:upToDate) up to date ($totalKb KB in all)"
 
-if ($WiFi) {
+if ($WiFi -or $BuildOnly) {
     # Hand the same files to the Wi-Fi updater (main.py and otaboot excepted: USB only).
     $fileMap = [ordered]@{}
     foreach ($table in @($runtimeFiles, $libFilesToDeploy)) {
@@ -255,6 +307,10 @@ if ($WiFi) {
     }
     $mapFile = Join-Path $buildDir 'files.json'
     $fileMap | ConvertTo-Json | Set-Content -Path $mapFile -Encoding utf8
+    if ($BuildOnly) {
+        Write-Host "Built: $mapFile"
+        exit 0
+    }
     # Built once, sent to each board in turn.
     $failed = @()
     foreach ($wifiHost in $WiFi) {
@@ -291,6 +347,12 @@ foreach ($name in $moduleNames) {
     $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
 }
 $remoteFilesToRemove += ':/lib/microdot.mpy'
+# The firmware before App Base had these in the root: the base does them now
+foreach ($name in @('api', 'asyncdns', 'captivedns', 'clock', 'devicebutton', 'deviceconfig', 'deviceidentity',
+        'htmlutil', 'httpserver', 'ledstrip', 'log', 'mqttgroup', 'mqttha', 'mqttstate', 'ntp', 'ota', 'passwords',
+        'picoled', 'provisioning', 'schedule', 'settings', 'watchdog', 'wificrypto', 'wlan')) {
+    $remoteFilesToRemove += @(":/$name.py", ":/$name.mpy")
+}
 
 # Remove files left by older deploys. Root copies of libraries would shadow /lib,
 # because the current directory comes first on sys.path. A raw /lib/microdot.py
@@ -318,7 +380,7 @@ if (-not $PreserveProvisioning) {
 
 # /update and /prev hold a Wi-Fi update's staged files and backups: a USB deploy
 # replaces everything, so a stale rollback must not undo it.
-$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www', ':/update', ':/prev')
+$remoteDirsToRemove = @(':/mqtt_as', ':/lib/mqtt_as', ':/typings', ':/www', ':/base', ':/update', ':/prev')
 
 Write-Host 'Resolving mpremote command...'
 $MpremoteCommand = Resolve-MpremoteCommand
@@ -350,7 +412,9 @@ foreach ($remoteDir in $remoteDirsToRemove) {
 }
 
 Write-Host 'Copying firmware files...'
-Invoke-MpRemote -Args @('fs', 'mkdir', ':/www') -AllowFailure | Out-Null
+foreach ($dir in @(':/www', ':/base', ':/base/www', ':/base/pico')) {
+    Invoke-MpRemote -Args @('fs', 'mkdir', $dir) -AllowFailure | Out-Null
+}
 foreach ($localPath in $runtimeFiles.Keys) {
     Invoke-MpRemote -Args @('fs', 'cp', $localPath, $runtimeFiles[$localPath]) | Out-Null
 }
@@ -379,8 +443,10 @@ if ($missing.Count -gt 0) {
 }
 
 if (-not $SkipReset) {
-    Write-Host 'Soft resetting device...'
-    Invoke-MpRemote -Args @('exec', 'import machine; machine.soft_reset()') | Out-Null
+    # A hard reset, as at power-on. A soft reset from mpremote exec happens in the
+    # raw REPL, which restarts the interpreter without running main.py.
+    Write-Host 'Resetting device...'
+    Invoke-MpRemote -Args @('reset') | Out-Null
 }
 
 $deployEnd = Get-Date

@@ -1,8 +1,8 @@
 import gc
 import ujson
-import uasyncio as asyncio
-import asyncdns
-from log import Log
+from base.compat import asyncio
+from base.pico import asyncdns
+from base.log import Log
 
 TAG = "HTTPC"
 
