@@ -10,7 +10,7 @@ param(
     [string[]]$WiFi,
     # Compile everything again, not just what changed.
     [switch]$Rebuild,
-    # Only build: compile, gzip and write buildiles.json (device path -> local file), then stop.
+    # Only build: compile, gzip and write build\files.json (device path -> local file), then stop.
     [switch]$BuildOnly
 )
 
